@@ -44,4 +44,14 @@ export const updateComplaintStatus = async (id: string, status: string) => {
   return res.data;
 };
 
+export const upvoteComplaint = async (id: string) => {
+  const res = await API.post(`/complaints/${id}/upvote`);
+  return res.data;
+};
+
+export const getRecurringComplaints = async () => {
+  const res = await API.get('/complaints/recurring');
+  return res.data;
+};
+
 export default API;

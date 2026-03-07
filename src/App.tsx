@@ -8,7 +8,7 @@ import ReportComplaint from "./pages/ReportComplaint";
 import TrackComplaints from "./pages/TrackComplaints";
 import ComplaintDetails from "./pages/ComplaintDetails";
 import AdminDashboard from "./pages/AdminDashboard";
-import ClerkTasks from "./pages/ClerkTasks";
+
 import AppLayout from "./layout/AppLayout";
 import NotFound from "./pages/NotFound";
 
@@ -27,7 +27,6 @@ const App = () => (
             <Route path="/track" element={<TrackComplaints />} />
             <Route path="/complaints/:id" element={<ComplaintDetails />} />
             <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/clerk" element={<ClerkTasks />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

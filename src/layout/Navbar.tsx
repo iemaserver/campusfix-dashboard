@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileWarning, ListChecks, Shield, Wrench, Menu, X } from 'lucide-react';
+import { LayoutDashboard, FileWarning, ListChecks, Shield, Wrench, Menu, X, Sun, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -8,12 +8,17 @@ const navItems = [
   { label: 'Report Issue', path: '/report', icon: FileWarning },
   { label: 'Track', path: '/track', icon: ListChecks },
   { label: 'Admin', path: '/admin', icon: Shield },
-  { label: 'Clerk', path: '/clerk', icon: Wrench },
 ];
 
 const Navbar = () => {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [dark, setDark] = useState(() => localStorage.getItem('theme') === 'dark');
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark);
+    localStorage.setItem('theme', dark ? 'dark' : 'light');
+  }, [dark]);
 
   return (
     <header className="sticky top-0 z-50 glass border-b border-border/30">
@@ -23,9 +28,9 @@ const Navbar = () => {
           <Link to="/" className="flex items-center gap-3 group">
             <div className="flex items-center gap-2">
               <div className="relative">
-                <img src="/assets/logo1.png" alt="University Logo" className="h-10 w-10 object-contain drop-shadow-sm" />
+                <img src="/assets/UEM_LOGO.png" alt="University Logo" className="h-10 w-10 object-contain drop-shadow-sm" />
               </div>
-              <img src="/assets/logo2.png" alt="CampusFix Logo" className="h-10 w-10 object-contain drop-shadow-sm" />
+              <img src="/assets/IEM.png" alt="CampusFix Logo" className="h-10 w-10 object-contain drop-shadow-sm" />
             </div>
             <div className="hidden sm:block">
               <span className="text-lg font-bold font-display text-gradient">CampusFix</span>
@@ -55,13 +60,24 @@ const Navbar = () => {
             })}
           </nav>
 
-          {/* Mobile menu button */}
-          <button
-            onClick={() => setMobileOpen(!mobileOpen)}
-            className="md:hidden p-2.5 rounded-xl text-muted-foreground hover:bg-muted transition-colors"
-          >
-            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
+          {/* Dark mode toggle + Mobile menu */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setDark(!dark)}
+              className="p-2.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {dark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </button>
+
+            {/* Mobile menu button */}
+            <button
+              onClick={() => setMobileOpen(!mobileOpen)}
+              className="md:hidden p-2.5 rounded-xl text-muted-foreground hover:bg-muted transition-colors"
+            >
+              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+          </div>
         </div>
       </div>
 

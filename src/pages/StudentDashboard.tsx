@@ -29,10 +29,10 @@ const StudentDashboard = () => {
         
         <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3">
-              <img src="/assets/logo1.png" alt="University" className="h-14 w-14 object-contain drop-shadow-lg" />
-              <img src="/assets/logo2.png" alt="CampusFix" className="h-14 w-14 object-contain drop-shadow-lg" />
-            </div>
+            {/* <div className="flex items-center gap-3">
+              <img src="/assets/IEM.png" alt="University" className="h-14 w-14 object-contain drop-shadow-lg" />
+              <img src="/assets/UEM_LOGO.png" alt="CampusFix" className="h-14 w-14 object-contain drop-shadow-lg" />
+            </div> */}
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <Zap className="h-5 w-5 text-yellow-300" />

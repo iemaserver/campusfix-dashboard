@@ -1,14 +1,26 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, Clock, CheckCircle2, Eye, UserPlus, Shield, Lock, Mail } from 'lucide-react';
+import { AlertCircle, Clock, CheckCircle2, Eye, Shield, Lock, Mail, RefreshCw } from 'lucide-react';
 import DashboardCard from '@/components/DashboardCard';
 import StatusBadge from '@/components/StatusBadge';
-import { getAdminComplaints, login } from '@/services/api';
+import { getAdminComplaints, login, updateComplaintStatus, getRecurringComplaints } from '@/services/api';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 
+const SESSION_KEY = 'admin_session';
+const SESSION_DURATION = 2 * 60 * 60 * 1000; // 2 hours
+
 const AdminDashboard = () => {
   const [complaints, setComplaints] = useState<any[]>([]);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [recurring, setRecurring] = useState<any[]>([]);
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    const session = localStorage.getItem(SESSION_KEY);
+    if (session) {
+      const expiry = Number(session);
+      if (Date.now() < expiry) return true;
+      localStorage.removeItem(SESSION_KEY);
+    }
+    return false;
+  });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -17,6 +29,7 @@ const AdminDashboard = () => {
   useEffect(() => {
     if (isLoggedIn) {
       getAdminComplaints().then(setComplaints);
+      getRecurringComplaints().then(setRecurring).catch(() => {});
     }
   }, [isLoggedIn]);
 
@@ -25,6 +38,7 @@ const AdminDashboard = () => {
     setLoading(true);
     try {
       await login(email, password);
+      localStorage.setItem(SESSION_KEY, String(Date.now() + SESSION_DURATION));
       setIsLoggedIn(true);
       toast.success('Admin access granted');
     } catch {
@@ -107,7 +121,10 @@ const AdminDashboard = () => {
           <p className="text-sm text-muted-foreground mt-1">Manage and assign campus complaints</p>
         </div>
         <button
-          onClick={() => setIsLoggedIn(false)}
+          onClick={() => {
+            localStorage.removeItem(SESSION_KEY);
+            setIsLoggedIn(false);
+          }}
           className="text-sm text-muted-foreground hover:text-destructive transition-colors font-medium"
         >
           Sign out
@@ -139,7 +156,11 @@ const AdminDashboard = () => {
                 <tr key={c._id} className="border-b border-border/20 hover:bg-muted/20 transition-colors animate-slide-in-right" style={{ animationDelay: `${300 + i * 60}ms` }}>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      <span className="text-lg">{c.category === 'Electricity' ? '⚡' : c.category === 'Water' ? '💧' : c.category === 'Internet' ? '📡' : c.category === 'Furniture' ? '🪑' : c.category === 'Cleanliness' ? '🧹' : '🏗️'}</span>
+                      {c.photo ? (
+                        <img src={c.photo} alt={c.category} className="w-9 h-9 rounded-lg object-cover border border-border/40" />
+                      ) : (
+                        <span className="text-lg">{c.category === 'Electricity' ? '⚡' : c.category === 'Water' ? '💧' : c.category === 'Internet' ? '📡' : c.category === 'Furniture' ? '🪑' : c.category === 'Cleanliness' ? '🧹' : '🏗️'}</span>
+                      )}
                       <span className="font-medium text-foreground">{c.category}</span>
                     </div>
                   </td>
@@ -155,13 +176,25 @@ const AdminDashboard = () => {
                       >
                         <Eye className="h-4 w-4" />
                       </button>
-                      <button
-                        onClick={() => toast.success(`Clerk assigned to ${c.category} complaint`)}
-                        className="p-2.5 rounded-xl text-muted-foreground hover:text-secondary hover:bg-secondary/10 transition-all"
-                        title="Assign Clerk"
+                      <select
+                        value={c.status}
+                        onChange={async (e) => {
+                          const newStatus = e.target.value;
+                          try {
+                            await updateComplaintStatus(c._id, newStatus);
+                            setComplaints(prev => prev.map(x => x._id === c._id ? { ...x, status: newStatus } : x));
+                            toast.success(`Status updated to ${newStatus}`);
+                          } catch {
+                            toast.error('Failed to update status');
+                          }
+                        }}
+                        className="text-xs font-medium rounded-xl border border-border/40 bg-background px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 cursor-pointer"
                       >
-                        <UserPlus className="h-4 w-4" />
-                      </button>
+                        <option value="Submitted">Submitted</option>
+                        <option value="Assigned">Assigned</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Completed">Completed</option>
+                      </select>
                     </div>
                   </td>
                 </tr>
@@ -170,6 +203,28 @@ const AdminDashboard = () => {
           </table>
         </div>
       </div>
+
+      {/* Recurring Complaints */}
+      {recurring.length > 0 && (
+        <div className="bg-card rounded-2xl shadow-card border border-border/40 overflow-hidden animate-slide-up" style={{ animationDelay: '300ms' }}>
+          <div className="px-6 py-4 border-b border-border/40 bg-muted/30 flex items-center gap-2">
+            <RefreshCw className="h-4 w-4 text-destructive" />
+            <h2 className="text-sm font-bold font-display text-foreground uppercase tracking-wider">Recurring Issues</h2>
+            <span className="ml-auto text-xs text-muted-foreground">{recurring.length} patterns detected</span>
+          </div>
+          <div className="divide-y divide-border/20">
+            {recurring.map((r, i) => (
+              <div key={i} className="px-6 py-4 flex items-center justify-between hover:bg-muted/20 transition-colors">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{r._id.category} — {r._id.building}, Room {r._id.room}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Reported {r.count} times</p>
+                </div>
+                <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-destructive/10 text-destructive">Recurring</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

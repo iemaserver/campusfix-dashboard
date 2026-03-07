@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, Tag, Calendar, CheckCircle2, Clock, UserCheck, Loader2, Info } from 'lucide-react';
+import { ArrowLeft, MapPin, Tag, Calendar, CheckCircle2, Clock, UserCheck, Loader2, Info, ThumbsUp } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
-import { getComplaintById } from '@/services/api';
+import { getComplaintById, upvoteComplaint } from '@/services/api';
+import { toast } from 'sonner';
 
 const timelineSteps = [
   { label: 'Submitted', desc: 'Complaint registered', icon: Clock },
@@ -24,10 +25,32 @@ const ComplaintDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [complaint, setComplaint] = useState<any>(null);
+  const [upvotes, setUpvotes] = useState(0);
+  const [hasUpvoted, setHasUpvoted] = useState(false);
 
   useEffect(() => {
-    if (id) getComplaintById(id).then(setComplaint);
+    if (id) getComplaintById(id).then((c: any) => {
+      setComplaint(c);
+      setUpvotes(c.upvotes || 0);
+      const voted = JSON.parse(localStorage.getItem('upvoted_complaints') || '[]');
+      setHasUpvoted(voted.includes(c._id));
+    });
   }, [id]);
+
+  const handleUpvote = async () => {
+    if (hasUpvoted || !complaint) return;
+    try {
+      const res = await upvoteComplaint(complaint._id);
+      setUpvotes(res.upvotes);
+      setHasUpvoted(true);
+      const voted = JSON.parse(localStorage.getItem('upvoted_complaints') || '[]');
+      voted.push(complaint._id);
+      localStorage.setItem('upvoted_complaints', JSON.stringify(voted));
+      toast.success('Upvoted!');
+    } catch {
+      toast.error('Failed to upvote');
+    }
+  };
 
   if (!complaint) return (
     <div className="flex items-center justify-center h-64">
@@ -46,12 +69,19 @@ const ComplaintDetails = () => {
 
       <div className="bg-card rounded-3xl shadow-card-hover border border-border/40 overflow-hidden animate-slide-up">
         {/* Hero banner */}
-        <div className={`relative h-40 bg-gradient-to-r ${config.gradient} flex items-center justify-center overflow-hidden`}>
-          <div className="absolute inset-0 bg-black/10" />
-          <div className="absolute top-4 right-4 w-32 h-32 bg-white/10 rounded-full" />
-          <div className="absolute bottom-4 left-8 w-20 h-20 bg-white/5 rounded-full" />
-          <span className="text-6xl relative z-10 drop-shadow-lg">{config.emoji}</span>
-        </div>
+        {complaint.photo ? (
+          <div className="relative h-56 overflow-hidden">
+            <img src={complaint.photo} alt={complaint.category} className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+          </div>
+        ) : (
+          <div className={`relative h-40 bg-gradient-to-r ${config.gradient} flex items-center justify-center overflow-hidden`}>
+            <div className="absolute inset-0 bg-black/10" />
+            <div className="absolute top-4 right-4 w-32 h-32 bg-white/10 rounded-full" />
+            <div className="absolute bottom-4 left-8 w-20 h-20 bg-white/5 rounded-full" />
+            <span className="text-6xl relative z-10 drop-shadow-lg">{config.emoji}</span>
+          </div>
+        )}
 
         <div className="p-6 md:p-8 space-y-8">
           {/* Header */}
@@ -64,7 +94,21 @@ const ComplaintDetails = () => {
                 <span className="flex items-center gap-1.5"><Tag className="h-4 w-4 text-primary/60" />{complaint.category}</span>
               </div>
             </div>
-            <StatusBadge status={complaint.status} />
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleUpvote}
+                disabled={hasUpvoted}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${
+                  hasUpvoted
+                    ? 'bg-primary/10 text-primary cursor-default'
+                    : 'bg-muted hover:bg-primary/10 hover:text-primary text-muted-foreground'
+                }`}
+              >
+                <ThumbsUp className={`h-4 w-4 ${hasUpvoted ? 'fill-primary' : ''}`} />
+                {complaint.upvotes || 0}
+              </button>
+              <StatusBadge status={complaint.status} />
+            </div>
           </div>
 
           {/* Description */}

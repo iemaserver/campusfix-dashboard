@@ -83,7 +83,7 @@ const ReportComplaint = () => {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {[
-              { field: 'building', label: 'Building', placeholder: 'e.g. Block A' },
+              { field: 'building', label: 'Building', placeholder: 'e.g. B1,B2,B3' },
               { field: 'floor', label: 'Floor', placeholder: 'e.g. 2nd Floor' },
               { field: 'room', label: 'Room', placeholder: 'e.g. 201' },
             ].map(input => (

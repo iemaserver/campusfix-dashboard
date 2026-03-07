@@ -139,13 +139,13 @@ const ReportComplaint = () => {
               <Upload className="h-4 w-4" />
               {photo ? 'Change Photo' : 'Upload Photo'}
             </button>
-            <button
+            {/* <button
               type="button"
               className="flex items-center gap-2 px-5 py-3 rounded-xl border-2 border-dashed border-border bg-card text-sm font-medium text-muted-foreground hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all duration-200"
             >
               <QrCode className="h-4 w-4" />
               Scan QR Code
-            </button>
+            </button> */}
           </div>
           {photoPreview && (
             <div className="relative inline-block">

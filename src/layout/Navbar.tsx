@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileWarning, ListChecks, Shield, Wrench, Menu, X, LogOut } from 'lucide-react';
+import { LayoutDashboard, FileWarning, ListChecks, Shield, Wrench, Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
-  { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+  { label: 'Dashboard', path: '/', icon: LayoutDashboard },
   { label: 'Report Issue', path: '/report', icon: FileWarning },
   { label: 'Track', path: '/track', icon: ListChecks },
   { label: 'Admin', path: '/admin', icon: Shield },
@@ -16,20 +16,25 @@ const Navbar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-lg border-b border-border/50">
+    <header className="sticky top-0 z-50 glass border-b border-border/30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to="/dashboard" className="flex items-center gap-3">
+          <Link to="/" className="flex items-center gap-3 group">
             <div className="flex items-center gap-2">
-              <img src="/assets/logo1.png" alt="University Logo" className="h-9 w-9 object-contain" />
-              <img src="/assets/logo2.png" alt="CampusFix Logo" className="h-9 w-9 object-contain" />
+              <div className="relative">
+                <img src="/assets/logo1.png" alt="University Logo" className="h-10 w-10 object-contain drop-shadow-sm" />
+              </div>
+              <img src="/assets/logo2.png" alt="CampusFix Logo" className="h-10 w-10 object-contain drop-shadow-sm" />
             </div>
-            <span className="text-lg font-bold text-primary hidden sm:block">CampusFix</span>
+            <div className="hidden sm:block">
+              <span className="text-lg font-bold font-display text-gradient">CampusFix</span>
+              <p className="text-[10px] text-muted-foreground leading-none -mt-0.5">Smart Complaint System</p>
+            </div>
           </Link>
 
           {/* Desktop Nav */}
-          <nav className="hidden md:flex items-center gap-1">
+          <nav className="hidden md:flex items-center gap-1 bg-muted/50 rounded-2xl p-1">
             {navItems.map((item) => {
               const active = location.pathname === item.path;
               return (
@@ -37,10 +42,10 @@ const Navbar = () => {
                   key={item.path}
                   to={item.path}
                   className={cn(
-                    'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
+                    'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200',
                     active
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                      ? 'gradient-primary text-primary-foreground shadow-button'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-card'
                   )}
                 >
                   <item.icon className="h-4 w-4" />
@@ -50,20 +55,10 @@ const Navbar = () => {
             })}
           </nav>
 
-          <div className="hidden md:flex items-center gap-2">
-            <Link
-              to="/"
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
-            >
-              <LogOut className="h-4 w-4" />
-              Logout
-            </Link>
-          </div>
-
           {/* Mobile menu button */}
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
-            className="md:hidden p-2 rounded-lg text-muted-foreground hover:bg-muted"
+            className="md:hidden p-2.5 rounded-xl text-muted-foreground hover:bg-muted transition-colors"
           >
             {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -72,7 +67,7 @@ const Navbar = () => {
 
       {/* Mobile Nav */}
       {mobileOpen && (
-        <div className="md:hidden border-t border-border/50 bg-card animate-fade-in">
+        <div className="md:hidden border-t border-border/30 glass animate-slide-up">
           <div className="px-4 py-3 space-y-1">
             {navItems.map((item) => {
               const active = location.pathname === item.path;
@@ -82,9 +77,9 @@ const Navbar = () => {
                   to={item.path}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
-                    'flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all',
+                    'flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all',
                     active
-                      ? 'bg-primary text-primary-foreground'
+                      ? 'gradient-primary text-primary-foreground shadow-button'
                       : 'text-muted-foreground hover:bg-muted'
                   )}
                 >
@@ -93,14 +88,6 @@ const Navbar = () => {
                 </Link>
               );
             })}
-            <Link
-              to="/"
-              onClick={() => setMobileOpen(false)}
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-destructive hover:bg-destructive/10"
-            >
-              <LogOut className="h-4 w-4" />
-              Logout
-            </Link>
           </div>
         </div>
       )}

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { AlertCircle, Clock, CheckCircle2, Eye, UserPlus, Shield, Lock, Mail } from 'lucide-react';
 import DashboardCard from '@/components/DashboardCard';
 import StatusBadge from '@/components/StatusBadge';
-import { getAdminComplaints } from '@/services/api';
+import { getAdminComplaints, login } from '@/services/api';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 
@@ -20,15 +20,18 @@ const AdminDashboard = () => {
     }
   }, [isLoggedIn]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Mock admin login
-    setTimeout(() => {
+    try {
+      await login(email, password);
       setIsLoggedIn(true);
       toast.success('Admin access granted');
+    } catch {
+      toast.error('Invalid credentials');
+    } finally {
       setLoading(false);
-    }, 800);
+    }
   };
 
   // Admin login gate

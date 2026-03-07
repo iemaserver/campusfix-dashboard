@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Send, Upload, QrCode, MapPin, FileText, ChevronDown } from 'lucide-react';
+import { Send, Upload, QrCode, MapPin, FileText, ChevronDown, X } from 'lucide-react';
 import { createComplaint } from '@/services/api';
 import { toast } from 'sonner';
 
@@ -16,6 +16,9 @@ const categories = [
 const ReportComplaint = () => {
   const navigate = useNavigate();
   const [form, setForm] = useState({ category: '', building: '', floor: '', room: '', description: '' });
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -24,6 +27,7 @@ const ReportComplaint = () => {
     try {
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => fd.append(k, v));
+      if (photo) fd.append('photo', photo);
       await createComplaint(fd);
       toast.success('Complaint submitted successfully!');
       navigate('/track');
@@ -112,21 +116,49 @@ const ReportComplaint = () => {
         </div>
 
         {/* Attachments */}
-        <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            className="flex items-center gap-2 px-5 py-3 rounded-xl border-2 border-dashed border-border bg-card text-sm font-medium text-muted-foreground hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all duration-200"
-          >
-            <Upload className="h-4 w-4" />
-            Upload Photo
-          </button>
-          <button
-            type="button"
-            className="flex items-center gap-2 px-5 py-3 rounded-xl border-2 border-dashed border-border bg-card text-sm font-medium text-muted-foreground hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all duration-200"
-          >
-            <QrCode className="h-4 w-4" />
-            Scan QR Code
-          </button>
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  setPhoto(file);
+                  setPhotoPreview(URL.createObjectURL(file));
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-2 px-5 py-3 rounded-xl border-2 border-dashed border-border bg-card text-sm font-medium text-muted-foreground hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all duration-200"
+            >
+              <Upload className="h-4 w-4" />
+              {photo ? 'Change Photo' : 'Upload Photo'}
+            </button>
+            <button
+              type="button"
+              className="flex items-center gap-2 px-5 py-3 rounded-xl border-2 border-dashed border-border bg-card text-sm font-medium text-muted-foreground hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all duration-200"
+            >
+              <QrCode className="h-4 w-4" />
+              Scan QR Code
+            </button>
+          </div>
+          {photoPreview && (
+            <div className="relative inline-block">
+              <img src={photoPreview} alt="Preview" className="h-32 rounded-xl border border-border/40 object-cover" />
+              <button
+                type="button"
+                onClick={() => { setPhoto(null); setPhotoPreview(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                className="absolute -top-2 -right-2 p-1 rounded-full bg-destructive text-destructive-foreground shadow-sm hover:opacity-90 transition-opacity"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Submit */}

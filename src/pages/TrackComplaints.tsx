@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getComplaints } from '@/services/api';
 import ComplaintCard from '@/components/ComplaintCard';
-import { Search } from 'lucide-react';
+import { Search, SlidersHorizontal } from 'lucide-react';
 
 const TrackComplaints = () => {
   const [complaints, setComplaints] = useState<any[]>([]);
@@ -22,22 +22,27 @@ const TrackComplaints = () => {
   });
 
   return (
-    <div className="animate-fade-in">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground">Track Complaints</h1>
-        <p className="text-sm text-muted-foreground mt-1">Monitor the status of your submitted complaints</p>
+    <div>
+      {/* Header */}
+      <div className="mb-8 animate-slide-up">
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/10 text-secondary text-xs font-semibold mb-3">
+          <SlidersHorizontal className="h-3 w-3" />
+          Tracking
+        </div>
+        <h1 className="text-2xl font-bold font-display text-foreground">Track Complaints</h1>
+        <p className="text-sm text-muted-foreground mt-1">Monitor the status of all submitted complaints</p>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row gap-4 mb-8 animate-slide-up" style={{ animationDelay: '100ms' }}>
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search complaints..."
+            placeholder="Search by category or description..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-input bg-card text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            className="w-full pl-11 pr-4 py-3 rounded-2xl border border-border/40 bg-card text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-primary shadow-card transition-all"
           />
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -45,10 +50,10 @@ const TrackComplaints = () => {
             <button
               key={s}
               onClick={() => setFilter(s)}
-              className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200 ${
                 filter === s
-                  ? 'gradient-primary text-primary-foreground shadow-sm'
-                  : 'bg-card border border-input text-muted-foreground hover:bg-muted'
+                  ? 'gradient-primary text-primary-foreground shadow-button'
+                  : 'bg-card border border-border/40 text-muted-foreground hover:border-primary/30 hover:text-foreground shadow-card'
               }`}
             >
               {s}
@@ -57,17 +62,25 @@ const TrackComplaints = () => {
         </div>
       </div>
 
+      {/* Results count */}
+      <p className="text-xs font-medium text-muted-foreground mb-4">{filtered.length} complaint{filtered.length !== 1 ? 's' : ''} found</p>
+
       {/* Complaints Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map(c => (
-          <ComplaintCard key={c._id} complaint={c} />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        {filtered.map((c, i) => (
+          <div key={c._id} className="animate-slide-up" style={{ animationDelay: `${200 + i * 80}ms` }}>
+            <ComplaintCard complaint={c} />
+          </div>
         ))}
       </div>
 
       {filtered.length === 0 && (
-        <div className="text-center py-16 text-muted-foreground">
-          <p className="text-lg font-medium">No complaints found</p>
-          <p className="text-sm mt-1">Try adjusting your filters</p>
+        <div className="text-center py-20">
+          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+            <Search className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <p className="text-lg font-semibold font-display text-foreground">No complaints found</p>
+          <p className="text-sm text-muted-foreground mt-1">Try adjusting your filters or search query</p>
         </div>
       )}
     </div>

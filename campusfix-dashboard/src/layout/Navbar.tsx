@@ -1,0 +1,114 @@
+import { useState, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { LayoutDashboard, FileWarning, ListChecks, Shield, Wrench, Menu, X, Sun, Moon } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+const navItems = [
+  { label: 'Dashboard', path: '/', icon: LayoutDashboard },
+  { label: 'Report Issue', path: '/report', icon: FileWarning },
+  { label: 'Track', path: '/track', icon: ListChecks },
+  { label: 'Admin', path: '/admin', icon: Shield },
+];
+
+const Navbar = () => {
+  const location = useLocation();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [dark, setDark] = useState(() => localStorage.getItem('theme') === 'dark');
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark);
+    localStorage.setItem('theme', dark ? 'dark' : 'light');
+  }, [dark]);
+
+  return (
+    <header className="sticky top-0 z-50 glass border-b border-border/30">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
+          {/* Logo */}
+          <Link to="/" className="flex items-center gap-3 group">
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <img src="/assets/UEM_LOGO.png" alt="University Logo" className="h-10 w-10 object-contain drop-shadow-sm" />
+              </div>
+              <img src="/assets/IEM.png" alt="CampusFix Logo" className="h-10 w-10 object-contain drop-shadow-sm" />
+            </div>
+            <div className="hidden sm:block">
+              <span className="text-lg font-bold font-display text-gradient">CampusFix</span>
+              <p className="text-[10px] text-muted-foreground leading-none -mt-0.5">Smart Complaint System</p>
+            </div>
+          </Link>
+
+          {/* Desktop Nav */}
+          <nav className="hidden md:flex items-center gap-1 bg-muted/50 rounded-2xl p-1">
+            {navItems.map((item) => {
+              const active = location.pathname === item.path;
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200',
+                    active
+                      ? 'gradient-primary text-primary-foreground shadow-button'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-card'
+                  )}
+                >
+                  <item.icon className="h-4 w-4" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Dark mode toggle + Mobile menu */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setDark(!dark)}
+              className="p-2.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {dark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </button>
+
+            {/* Mobile menu button */}
+            <button
+              onClick={() => setMobileOpen(!mobileOpen)}
+              className="md:hidden p-2.5 rounded-xl text-muted-foreground hover:bg-muted transition-colors"
+            >
+              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile Nav */}
+      {mobileOpen && (
+        <div className="md:hidden border-t border-border/30 glass animate-slide-up">
+          <div className="px-4 py-3 space-y-1">
+            {navItems.map((item) => {
+              const active = location.pathname === item.path;
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all',
+                    active
+                      ? 'gradient-primary text-primary-foreground shadow-button'
+                      : 'text-muted-foreground hover:bg-muted'
+                  )}
+                >
+                  <item.icon className="h-4 w-4" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </header>
+  );
+};
+
+export default Navbar;

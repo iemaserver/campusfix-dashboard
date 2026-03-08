@@ -7,6 +7,52 @@ const API = axios.create({
   },
 });
 
+// ── Auth ─────────────────────────────────────────────────────────────────
+export const microsoftLogin = async (accessToken: string) => {
+  const res = await API.post('/auth/microsoft', { access_token: accessToken });
+  return res.data;
+};
+
+export const studentRegister = async (name: string, email: string, password: string) => {
+  try {
+    const res = await API.post('/auth/student-register', { name, email, password });
+    return res.data;
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.data?.error) {
+      throw new Error(err.response.data.error);
+    }
+    throw err;
+  }
+};
+
+export const studentLogin = async (email: string, password: string) => {
+  try {
+    const res = await API.post('/auth/student-login', { email, password });
+    return res.data;
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.data?.error) {
+      throw new Error(err.response.data.error);
+    }
+    throw err;
+  }
+};
+
+export const sendOtp = async (email: string) => {
+  const res = await API.post('/auth/send-otp', { email });
+  return res.data;
+};
+
+export const verifyOtp = async (email: string, otp: string) => {
+  const res = await API.post('/auth/verify-otp', { email, otp });
+  return res.data;
+};
+
+export const adminLogin = async (email: string, password: string) => {
+  const res = await API.post('/auth/admin-login', { email, password });
+  return res.data;
+};
+
+// Legacy — kept for backward compat
 export const login = async (email: string, password: string) => {
   const res = await API.post('/login', { email, password });
   return res.data;

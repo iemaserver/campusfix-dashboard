@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileWarning, ListChecks, Shield, Wrench, Menu, X, Sun, Moon } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, FileWarning, ListChecks, Shield, Wrench, Menu, X, Sun, Moon, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -12,8 +12,16 @@ const navItems = [
 
 const Navbar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dark, setDark] = useState(() => localStorage.getItem('theme') === 'dark');
+
+  const studentUser = JSON.parse(localStorage.getItem('student_user') || 'null');
+
+  const handleLogout = () => {
+    localStorage.removeItem('student_user');
+    navigate('/welcome');
+  };
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
@@ -60,8 +68,24 @@ const Navbar = () => {
             })}
           </nav>
 
-          {/* Dark mode toggle + Mobile menu */}
+          {/* Dark mode toggle + logout + Mobile menu */}
           <div className="flex items-center gap-1">
+            {/* Student greeting + logout */}
+            {studentUser && (
+              <div className="hidden sm:flex items-center gap-2 mr-1">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Hi, {studentUser.name}
+                </span>
+                <button
+                  onClick={handleLogout}
+                  className="p-2.5 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                  title="Logout"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+
             <button
               onClick={() => setDark(!dark)}
               className="p-2.5 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"

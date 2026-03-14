@@ -5,6 +5,7 @@ from flask_cors import CORS
 from routes.complaints import complaints_bp
 from routes.admin import admin_bp
 from routes.dashboard import dashboard_bp
+from routes.auth import auth_bp
 
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -17,6 +18,7 @@ CORS(app)
 app.register_blueprint(complaints_bp, url_prefix="/api")
 app.register_blueprint(admin_bp, url_prefix="/api")
 app.register_blueprint(dashboard_bp, url_prefix="/api")
+app.register_blueprint(auth_bp, url_prefix="/api")
 
 
 @app.route("/")

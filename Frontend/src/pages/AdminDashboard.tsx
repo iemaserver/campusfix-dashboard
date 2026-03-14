@@ -1,18 +1,19 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, Clock, CheckCircle2, Eye, Shield, Lock, Mail, RefreshCw } from 'lucide-react';
+import { AlertCircle, Clock, CheckCircle2, Eye, Shield, RefreshCw } from 'lucide-react';
 import DashboardCard from '@/components/DashboardCard';
 import StatusBadge from '@/components/StatusBadge';
-import { getAdminComplaints, login, updateComplaintStatus, getRecurringComplaints } from '@/services/api';
+import { getAdminComplaints, updateComplaintStatus, getRecurringComplaints } from '@/services/api';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 
 const SESSION_KEY = 'admin_session';
-const SESSION_DURATION = 2 * 60 * 60 * 1000; // 2 hours
 
 const AdminDashboard = () => {
   const [complaints, setComplaints] = useState<any[]>([]);
   const [recurring, setRecurring] = useState<any[]>([]);
-  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+  const navigate = useNavigate();
+
+  const isLoggedIn = (() => {
     const session = localStorage.getItem(SESSION_KEY);
     if (session) {
       const expiry = Number(session);
@@ -20,11 +21,7 @@ const AdminDashboard = () => {
       localStorage.removeItem(SESSION_KEY);
     }
     return false;
-  });
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+  })();
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -33,75 +30,9 @@ const AdminDashboard = () => {
     }
   }, [isLoggedIn]);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await login(email, password);
-      localStorage.setItem(SESSION_KEY, String(Date.now() + SESSION_DURATION));
-      setIsLoggedIn(true);
-      toast.success('Admin access granted');
-    } catch {
-      toast.error('Invalid credentials');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Admin login gate
+  // Redirect to manager login if not authenticated
   if (!isLoggedIn) {
-    return (
-      <div className="flex items-center justify-center min-h-[70vh]">
-        <div className="w-full max-w-md animate-slide-up">
-          <div className="bg-card rounded-3xl shadow-card-hover border border-border/40 overflow-hidden">
-            {/* Header */}
-            <div className="gradient-hero p-8 text-center relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
-              <div className="relative">
-                <div className="w-16 h-16 rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center mx-auto mb-4 border border-white/20">
-                  <Shield className="h-8 w-8 text-white" />
-                </div>
-                <h1 className="text-xl font-bold font-display text-white">Admin Access</h1>
-                <p className="text-sm text-white/60 mt-1">Sign in to manage complaints</p>
-              </div>
-            </div>
-
-            <form onSubmit={handleLogin} className="p-8 space-y-4">
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <input
-                  type="email"
-                  placeholder="Admin email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-primary text-sm transition-all"
-                  required
-                />
-              </div>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <input
-                  type="password"
-                  placeholder="Password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-primary text-sm transition-all"
-                  required
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full gradient-primary text-primary-foreground py-3.5 rounded-xl font-bold text-sm shadow-button hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-40"
-              >
-                <Lock className="h-4 w-4" />
-                {loading ? 'Verifying...' : 'Sign In as Admin'}
-              </button>
-            </form>
-          </div>
-        </div>
-      </div>
-    );
+    return <Navigate to="/manager-login" replace />;
   }
 
   const total = complaints.length;
@@ -123,7 +54,7 @@ const AdminDashboard = () => {
         <button
           onClick={() => {
             localStorage.removeItem(SESSION_KEY);
-            setIsLoggedIn(false);
+            navigate('/manager-login');
           }}
           className="text-sm text-muted-foreground hover:text-destructive transition-colors font-medium"
         >

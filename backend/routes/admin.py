@@ -1,26 +1,29 @@
+import os
 from flask import Blueprint, request, jsonify
+from dotenv import load_dotenv
+
+load_dotenv()
 
 admin_bp = Blueprint("admin", __name__)
 
-# Temporary admin credentials
-ADMIN_EMAIL = "admin@gmail.com"
-ADMIN_PASSWORD = "admin"
+# Admin credentials loaded from .env
+ADMIN_EMAIL    = os.getenv("ADMIN_EMAIL", "admin@gmail.com")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
 
+# /api/login kept for backward-compat but auth is now handled by auth_bp
 @admin_bp.route("/login", methods=["POST"])
-def admin_login():
-    """Validate admin credentials."""
+def admin_login_legacy():
+    """Legacy endpoint — delegates to same logic."""
     data = request.get_json(silent=True) or {}
-    email = data.get("email", "")
+    email    = data.get("email", "")
     password = data.get("password", "")
-
     if email == ADMIN_EMAIL and password == ADMIN_PASSWORD:
         return jsonify({
             "success": True,
             "message": "Login successful",
             "user": {"email": email, "role": "admin", "name": "Admin"},
         }), 200
-
     return jsonify({"error": "Invalid credentials"}), 401
 
 

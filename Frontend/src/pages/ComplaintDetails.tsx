@@ -181,7 +181,7 @@ const ComplaintDetails = () => {
   const statusIndex = displaySteps.findIndex(s => s.label === complaint.status);
 
   const statusTimestamps: Record<string, string> = {};
-  const statusMeta: Record<string, { admin_name: string; authority_name: string }> = {};
+  const statusMeta: Record<string, { admin_name: string; authority_name: string; student_name: string; reason: string }> = {};
   (complaint.status_history || []).forEach((h: any) => {
     if (h.status && h.timestamp && !statusTimestamps[h.status]) {
       statusTimestamps[h.status] = h.timestamp;

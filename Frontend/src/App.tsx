@@ -18,10 +18,26 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-// Guard: redirect to welcome if no student session
-const RequireStudent = ({ children }: { children: React.ReactNode }) => {
-  const user = localStorage.getItem('student_user');
-  return user ? <>{children}</> : <Navigate to="/welcome" replace />;
+const ADMIN_SESSION_KEY = 'admin_session';
+
+const hasActiveAdminSession = () => {
+  const session = localStorage.getItem(ADMIN_SESSION_KEY);
+  if (!session) return false;
+
+  const expiry = Number(session);
+  if (Number.isNaN(expiry) || Date.now() >= expiry) {
+    localStorage.removeItem(ADMIN_SESSION_KEY);
+    return false;
+  }
+
+  return true;
+};
+
+// Guard: allow student or admin session; otherwise redirect to welcome
+const RequireAppAccess = ({ children }: { children: React.ReactNode }) => {
+  const hasStudent = Boolean(localStorage.getItem('student_user'));
+  const hasAdmin = hasActiveAdminSession();
+  return hasStudent || hasAdmin ? <>{children}</> : <Navigate to="/welcome" replace />;
 };
 
 const App = () => (
@@ -39,10 +55,10 @@ const App = () => (
 
           {/* App routes (with navbar) */}
           <Route element={<AppLayout />}>
-            <Route path="/" element={<RequireStudent><StudentDashboard /></RequireStudent>} />
-            <Route path="/report" element={<RequireStudent><ReportComplaint /></RequireStudent>} />
-            <Route path="/track" element={<RequireStudent><TrackComplaints /></RequireStudent>} />
-            <Route path="/complaints/:id" element={<RequireStudent><ComplaintDetails /></RequireStudent>} />
+            <Route path="/" element={<RequireAppAccess><StudentDashboard /></RequireAppAccess>} />
+            <Route path="/report" element={<RequireAppAccess><ReportComplaint /></RequireAppAccess>} />
+            <Route path="/track" element={<RequireAppAccess><TrackComplaints /></RequireAppAccess>} />
+            <Route path="/complaints/:id" element={<RequireAppAccess><ComplaintDetails /></RequireAppAccess>} />
             <Route path="/admin" element={<AdminDashboard />} />
           </Route>
 

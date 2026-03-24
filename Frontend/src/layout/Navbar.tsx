@@ -10,6 +10,8 @@ const navItems = [
   { label: 'Admin', path: '/admin', icon: Shield },
 ];
 
+const ADMIN_SESSION_KEY = 'admin_session';
+
 const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -17,6 +19,22 @@ const Navbar = () => {
   const [dark, setDark] = useState(() => localStorage.getItem('theme') === 'dark');
 
   const studentUser = JSON.parse(localStorage.getItem('student_user') || 'null');
+  const isAdminLoggedIn = (() => {
+    const session = localStorage.getItem(ADMIN_SESSION_KEY);
+    if (!session) return false;
+
+    const expiry = Number(session);
+    if (Number.isNaN(expiry) || Date.now() >= expiry) {
+      localStorage.removeItem(ADMIN_SESSION_KEY);
+      return false;
+    }
+
+    return true;
+  })();
+
+  const visibleNavItems = studentUser && !isAdminLoggedIn
+    ? navItems.filter((item) => item.path !== '/admin')
+    : navItems;
 
   const handleLogout = () => {
     localStorage.removeItem('student_user');
@@ -48,7 +66,7 @@ const Navbar = () => {
 
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-1 bg-muted/50 rounded-2xl p-1">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const active = location.pathname === item.path;
               return (
                 <Link
@@ -109,7 +127,7 @@ const Navbar = () => {
       {mobileOpen && (
         <div className="md:hidden border-t border-border/30 glass animate-slide-up">
           <div className="px-4 py-3 space-y-1">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const active = location.pathname === item.path;
               return (
                 <Link

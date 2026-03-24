@@ -4,6 +4,11 @@ import { ArrowLeft, Loader2, UserPlus, Mail, Lock, User } from 'lucide-react';
 import { studentRegister } from '@/services/api';
 import { toast } from 'sonner';
 
+const isAllowedStudentEmail = (value: string) => {
+  const emailValue = value.toLowerCase();
+  return emailValue.endsWith('@uem.edu.in') || emailValue.endsWith('@iem.edu.in');
+};
+
 const StudentRegister = () => {
   const navigate = useNavigate();
   const [name, setName] = useState('');
@@ -19,8 +24,8 @@ const StudentRegister = () => {
       toast.error('Please enter your name');
       return;
     }
-    if (!email.toLowerCase().endsWith('@uem.edu.in')) {
-      toast.error('Please use your @uem.edu.in email address');
+    if (!isAllowedStudentEmail(email)) {
+      toast.error('Please use your @uem.edu.in or @iem.edu.in email address');
       return;
     }
     if (password.length < 6) {
@@ -63,7 +68,7 @@ const StudentRegister = () => {
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">Student Registration</h1>
           <p className="text-blue-200 text-sm">
-            Create your account with <span className="text-blue-300 font-semibold">@uem.edu.in</span> email
+            Create your account with <span className="text-blue-300 font-semibold">@uem.edu.in</span> or <span className="text-blue-300 font-semibold">@iem.edu.in</span> email
           </p>
         </div>
 
@@ -92,7 +97,7 @@ const StudentRegister = () => {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="yourname@uem.edu.in"
+                placeholder="yourname@uem.edu.in or yourname@iem.edu.in"
                 className="w-full pl-12 pr-4 py-3.5 bg-white/10 border border-white/20 rounded-xl text-white placeholder:text-blue-300/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/50 focus:border-transparent transition-all"
                 required
               />

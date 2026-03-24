@@ -29,6 +29,12 @@ students_collection = db["students"]
 otp_store: dict = {}
 
 
+def _is_allowed_student_email(email: str) -> bool:
+    """Allow only official student domains."""
+    normalized = email.strip().lower()
+    return normalized.endswith("@uem.edu.in") or normalized.endswith("@iem.edu.in")
+
+
 def _send_otp_email(to_email: str, otp: str) -> None:
     msg = MIMEMultipart("alternative")
     msg["Subject"] = "CampusFix – Your OTP Verification Code"
@@ -108,6 +114,9 @@ def send_otp():
     if not email:
         return jsonify({"error": "Email is required"}), 400
 
+    if not _is_allowed_student_email(email):
+        return jsonify({"error": "Only @uem.edu.in and @iem.edu.in email addresses are allowed"}), 403
+
     otp        = str(random.randint(100000, 999999))
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
     otp_store[email] = {"otp": otp, "expires_at": expires_at}
@@ -171,8 +180,8 @@ def student_register():
     if not name or not email or not password:
         return jsonify({"error": "Name, email, and password are required"}), 400
 
-    if not email.endswith("@uem.edu.in"):
-        return jsonify({"error": "Only @uem.edu.in email addresses are allowed"}), 403
+    if not _is_allowed_student_email(email):
+        return jsonify({"error": "Only @uem.edu.in and @iem.edu.in email addresses are allowed"}), 403
 
     if len(password) < 6:
         return jsonify({"error": "Password must be at least 6 characters"}), 400
@@ -211,8 +220,8 @@ def student_login():
     if not email or not password:
         return jsonify({"error": "Email and password are required"}), 400
 
-    if not email.endswith("@uem.edu.in"):
-        return jsonify({"error": "Only @uem.edu.in email addresses are allowed"}), 403
+    if not _is_allowed_student_email(email):
+        return jsonify({"error": "Only @uem.edu.in and @iem.edu.in email addresses are allowed"}), 403
 
     student = students_collection.find_one({"email": email})
     if not student or not student.get("password_hash"):
@@ -264,10 +273,10 @@ def microsoft_login():
     if not email:
         return jsonify({"error": "Could not retrieve email from Microsoft account"}), 400
 
-    # ── Enforce UEM domain ───────────────────────────────────────────────
-    if not email.endswith("@uem.edu.in"):
+    # ── Enforce allowed student domains ──────────────────────────────────
+    if not _is_allowed_student_email(email):
         return jsonify({
-            "error": "Access restricted to UEM students only. Please use your @uem.edu.in Outlook account."
+            "error": "Access restricted to students only. Please use your @uem.edu.in or @iem.edu.in Outlook account."
         }), 403
 
     # Upsert student in DB

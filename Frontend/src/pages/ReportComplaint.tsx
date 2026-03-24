@@ -85,7 +85,7 @@ const ReportComplaint = () => {
             {[
               { field: 'building', label: 'Building', placeholder: 'e.g. B1,B2,B3' },
               { field: 'floor', label: 'Floor', placeholder: 'e.g. 2nd Floor' },
-              { field: 'room', label: 'Room', placeholder: 'e.g. 201' },
+              { field: 'room', label: 'Room', placeholder: 'e.g. 2.1,2.2' },
             ].map(input => (
               <div key={input.field}>
                 <label className="block text-xs font-medium text-muted-foreground mb-1.5">{input.label}</label>

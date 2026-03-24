@@ -1,42 +1,63 @@
-﻿import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Loader2, GraduationCap, Mail, Lock, LogIn } from 'lucide-react';
-import { msalInstance, popupRequest } from '@/lib/msal';
-import { microsoftLogin, studentLogin } from '@/services/api';
+﻿import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, Loader2, GraduationCap, Mail, KeyRound, LogIn } from 'lucide-react';
+import { sendOtp, verifyOtp } from '@/services/api';
 import { toast } from 'sonner';
 
-/* -- Outlook logo SVG ------------------------------------------------- */
-const OutlookLogo = () => (
-  <svg className="h-5 w-5 flex-shrink-0" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-    <rect width="48" height="48" rx="8" fill="#0078D4" />
-    <path d="M26 10h12a2 2 0 0 1 2 2v24a2 2 0 0 1-2 2H26V10z" fill="#50E6FF" opacity=".4" />
-    <path d="M8 16l18-6v28L8 32V16z" fill="#fff" />
-    <ellipse cx="17" cy="24" rx="5" ry="6" fill="#0078D4" />
-    <path d="M26 18h12v3H26zM26 23h12v2H26zM26 27h12v3H26z" fill="#0078D4" />
-  </svg>
-);
+const isAllowedStudentEmail = (value: string) => {
+  const emailValue = value.toLowerCase();
+  return emailValue.endsWith('@uem.edu.in') || emailValue.endsWith('@iem.edu.in');
+};
 
 const StudentLogin = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [outlookLoading, setOutlookLoading] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const otpInputRef = useRef<HTMLInputElement>(null);
 
-  const handleEmailLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.toLowerCase().endsWith('@uem.edu.in')) {
-      toast.error('Please use your @uem.edu.in email address');
+  useEffect(() => {
+    if (otpSent) {
+      otpInputRef.current?.focus();
+    }
+  }, [otpSent]);
+
+  const handleSendOtp = async () => {
+    if (!isAllowedStudentEmail(email)) {
+      toast.error('Please use your @uem.edu.in or @iem.edu.in email address');
       return;
     }
-    if (!password) {
-      toast.error('Please enter your password');
-      return;
-    }
 
-    setLoading(true);
+    setSendingOtp(true);
     try {
-      const res = await studentLogin(email.toLowerCase(), password);
+      await sendOtp(email.toLowerCase());
+      setOtp('');
+      setOtpSent(true);
+      toast.success('OTP sent to your email');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to send OTP';
+      toast.error(message);
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  const handleOtpLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isAllowedStudentEmail(email)) {
+      toast.error('Please use your @uem.edu.in or @iem.edu.in email address');
+      return;
+    }
+    if (otp.trim().length !== 6) {
+      toast.error('Please enter the 6-digit OTP sent to your email');
+      return;
+    }
+
+    setVerifying(true);
+    try {
+      const res = await verifyOtp(email.toLowerCase(), otp.trim());
       localStorage.setItem('student_user', JSON.stringify(res.user));
       toast.success(`Welcome back, ${res.user.name || res.user.email}!`);
       navigate('/');
@@ -44,29 +65,13 @@ const StudentLogin = () => {
       const message = err instanceof Error ? err.message : 'Login failed';
       toast.error(message);
     } finally {
-      setLoading(false);
+      setVerifying(false);
     }
   };
 
-  const handleOutlookLogin = async () => {
-    setOutlookLoading(true);
-    try {
-      const result = await msalInstance.loginPopup(popupRequest);
-      const res = await microsoftLogin(result.accessToken);
-      localStorage.setItem('student_user', JSON.stringify(res.user));
-      toast.success(`Welcome, ${res.user.name || res.user.email}!`);
-      navigate('/');
-    } catch (err: unknown) {
-      if (err instanceof Error && err.message?.includes('user_cancelled')) return;
-      const message = err instanceof Error ? err.message : 'Sign-in failed';
-      if (message.toLowerCase().includes('uem.edu.in')) {
-        toast.error('Only @uem.edu.in Outlook accounts are permitted.');
-      } else {
-        toast.error(message);
-      }
-    } finally {
-      setOutlookLoading(false);
-    }
+  const handleOtpChange = (value: string) => {
+    const cleanOtp = value.replace(/\D/g, '').slice(0, 6);
+    setOtp(cleanOtp);
   };
 
   return (
@@ -95,74 +100,116 @@ const StudentLogin = () => {
                 <GraduationCap className="h-8 w-8 text-white" />
               </div>
               <h1 className="text-xl font-bold font-display text-white">Student Login</h1>
-              <p className="text-sm text-white/60 mt-1">Sign in with your @uem.edu.in account</p>
+              <p className="text-sm text-white/60 mt-1">Sign in with your @uem.edu.in or @iem.edu.in account</p>
             </div>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleEmailLogin} className="p-8 space-y-4">
+          <form onSubmit={handleOtpLogin} className="p-8 space-y-4">
             <div className="relative">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 type="email"
-                placeholder="yourname@uem.edu.in"
+                placeholder="yourname@uem.edu.in or yourname@iem.edu.in"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-primary text-sm transition-all"
                 required
               />
             </div>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <input
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-primary text-sm transition-all"
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full gradient-primary text-primary-foreground py-3.5 rounded-xl font-bold text-sm shadow-button hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-40"
-            >
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
-              {loading ? 'Signing in...' : 'Login'}
-            </button>
 
-            {/* Register Link */}
-            <p className="text-center text-sm text-muted-foreground">
-              Don't have an account?{' '}
-              <Link to="/student-register" className="text-primary hover:underline font-semibold">
-                Register
-              </Link>
-            </p>
+            {otpSent && (
+              <div className="space-y-3 animate-slide-up">
+                <div className="flex items-center justify-center gap-2 text-xs font-semibold text-muted-foreground">
+                  <KeyRound className="h-3.5 w-3.5 text-primary" />
+                  Enter the 6-digit OTP
+                </div>
 
-            {/* Divider */}
-            <div className="flex items-center gap-3 my-2">
-              <div className="flex-1 h-px bg-border" />
-              <span className="text-xs text-muted-foreground font-medium">OR</span>
-              <div className="flex-1 h-px bg-border" />
-            </div>
+                <div
+                  className="relative"
+                  onClick={() => otpInputRef.current?.focus()}
+                >
+                  <input
+                    ref={otpInputRef}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    value={otp}
+                    onChange={(e) => handleOtpChange(e.target.value)}
+                    className="absolute inset-0 opacity-0 pointer-events-none"
+                    aria-label="Enter 6-digit OTP"
+                  />
 
-            {/* Outlook Login */}
-            <button
-              type="button"
-              onClick={handleOutlookLogin}
-              disabled={outlookLoading}
-              className="w-full flex items-center justify-center gap-3 px-6 py-3.5 bg-white hover:bg-gray-50 border border-border rounded-xl shadow-sm hover:shadow transition-all font-semibold text-gray-800 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {outlookLoading ? <Loader2 className="h-5 w-5 animate-spin text-blue-600" /> : <OutlookLogo />}
-              {outlookLoading ? 'Signing in...' : 'Sign in with Outlook'}
-            </button>
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-primary/20 via-secondary/20 to-cyan-400/20 blur-xl animate-pulse-slow pointer-events-none" />
+
+                  <div className="relative grid grid-cols-6 gap-2 sm:gap-3">
+                    {Array.from({ length: 6 }).map((_, index) => {
+                      const digit = otp[index] ?? '';
+                      const isFilled = Boolean(digit);
+                      const isCurrent = index === otp.length;
+
+                      return (
+                        <div
+                          key={index}
+                          className={`h-12 sm:h-14 rounded-xl border-2 flex items-center justify-center text-lg sm:text-xl font-extrabold font-display tracking-tight transition-all duration-300 select-none ${
+                            isFilled
+                              ? 'border-primary/70 bg-gradient-to-br from-primary/90 to-secondary text-primary-foreground shadow-lg shadow-primary/30 scale-[1.03]'
+                              : isCurrent
+                                ? 'border-primary/60 bg-primary/5 text-primary ring-4 ring-primary/15'
+                                : 'border-border/60 bg-muted/40 text-muted-foreground'
+                          }`}
+                          style={{ animationDelay: `${index * 45}ms` }}
+                        >
+                          {digit || (isCurrent ? '|' : '')}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-center text-muted-foreground">
+                  Tip: You can paste the full OTP directly.
+                </p>
+              </div>
+            )}
+
+            {!otpSent ? (
+              <button
+                type="button"
+                onClick={handleSendOtp}
+                disabled={sendingOtp}
+                className="w-full gradient-primary text-primary-foreground py-3.5 rounded-xl font-bold text-sm shadow-button hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-40"
+              >
+                {sendingOtp ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                {sendingOtp ? 'Sending OTP...' : 'Send OTP'}
+              </button>
+            ) : (
+              <>
+                <button
+                  type="submit"
+                  disabled={verifying}
+                  className="w-full gradient-primary text-primary-foreground py-3.5 rounded-xl font-bold text-sm shadow-button hover:opacity-90 transition-all flex items-center justify-center gap-2 disabled:opacity-40"
+                >
+                  {verifying ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
+                  {verifying ? 'Verifying...' : 'Verify OTP & Login'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSendOtp}
+                  disabled={sendingOtp || verifying}
+                  className="w-full py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all disabled:opacity-40"
+                >
+                  {sendingOtp ? 'Resending OTP...' : 'Resend OTP'}
+                </button>
+              </>
+            )}
           </form>
 
           <div className="px-8 pb-8">
             <div className="bg-muted/50 rounded-xl p-4 border border-border/30">
               <p className="text-xs text-muted-foreground text-center">
-                Use your UEM Outlook account for instant access
+                Password is not required. Login happens using OTP sent to your official email.
               </p>
             </div>
           </div>

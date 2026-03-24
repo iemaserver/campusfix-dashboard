@@ -4,36 +4,43 @@ import "./index.css";
 import { msalInstance } from "./lib/msal";
 import React from "react";
 
-// Check if this is a popup window returning from Microsoft auth
-const isPopup = !!window.opener && window.opener !== window;
-const hasAuthHash = window.location.hash.includes('code=') || 
-                    window.location.hash.includes('id_token=') ||
-                    window.location.hash.includes('access_token=');
-
-if (isPopup && hasAuthHash) {
-  // This is the popup returning from auth - show message and let MSAL handle it
-  document.body.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:center;height:100vh;background:linear-gradient(135deg,#1e3a8a,#3b82f6);color:white;text-align:center;font-family:system-ui;">
-      <div>
-        <div style="font-size:48px;margin-bottom:16px;">✓</div>
-        <h2 style="margin:0 0 8px;">Sign-in complete!</h2>
-        <p style="opacity:0.8;font-size:14px;">Closing...</p>
-      </div>
-    </div>
-  `;
-  // Initialize MSAL to process the auth response, then close
-  msalInstance.initialize().then(() => {
-    return msalInstance.handleRedirectPromise();
-  }).finally(() => {
-    setTimeout(() => window.close(), 500);
+msalInstance.initialize().then(() => {
+  console.log("[MSAL] Initialized. Calling handleRedirectPromise...");
+  return msalInstance.handleRedirectPromise().catch((err) => {
+    console.warn("[MSAL] handleRedirectPromise error (non-fatal):", err);
+    return null;
   });
-} else {
-  // Normal app load
-  msalInstance.initialize().then(() => {
-    createRoot(document.getElementById("root")!).render(
-      <React.StrictMode>
-        <App />
-      </React.StrictMode>
-    );
-  }).catch(console.error);
-}
+}).then(async (response) => {
+  console.log("[MSAL] handleRedirectPromise result:", response);
+
+  // If returning from a Microsoft redirect, process the auth
+  if (response && response.accessToken) {
+    console.log("[MSAL] Got access token, calling backend...");
+    try {
+      const res = await fetch("http://localhost:5000/api/auth/microsoft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_token: response.accessToken }),
+      });
+      const data = await res.json();
+      console.log("[MSAL] Backend response:", data);
+      if (data.success && data.user) {
+        localStorage.setItem("student_user", JSON.stringify(data.user));
+        console.log("[MSAL] User saved. Redirecting to dashboard...");
+        // Navigate to dashboard with a clean URL
+        window.location.replace("/");
+        return;
+      } else {
+        console.error("[MSAL] Backend rejected login:", data);
+      }
+    } catch (e) {
+      console.error("[MSAL] Backend call failed:", e);
+    }
+  }
+
+  createRoot(document.getElementById("root")!).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+}).catch(console.error);

@@ -1,8 +1,8 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Loader2, GraduationCap, Mail, Lock, LogIn } from 'lucide-react';
 import { msalInstance, popupRequest } from '@/lib/msal';
-import { microsoftLogin, studentLogin } from '@/services/api';
+import { studentLogin } from '@/services/api';
 import { toast } from 'sonner';
 
 /* -- Outlook logo SVG ------------------------------------------------- */
@@ -49,21 +49,19 @@ const StudentLogin = () => {
   };
 
   const handleOutlookLogin = async () => {
+    if (outlookLoading) return;
     setOutlookLoading(true);
     try {
-      const result = await msalInstance.loginPopup(popupRequest);
-      const res = await microsoftLogin(result.accessToken);
-      localStorage.setItem('student_user', JSON.stringify(res.user));
-      toast.success(`Welcome, ${res.user.name || res.user.email}!`);
-      navigate('/');
+      // Redirect to Microsoft login — main.tsx handles the response on return
+      await msalInstance.loginRedirect(popupRequest);
     } catch (err: unknown) {
       if (err instanceof Error && err.message?.includes('user_cancelled')) return;
-      const message = err instanceof Error ? err.message : 'Sign-in failed';
-      if (message.toLowerCase().includes('uem.edu.in')) {
-        toast.error('Only @uem.edu.in Outlook accounts are permitted.');
-      } else {
-        toast.error(message);
+      if (err instanceof Error && err.message?.includes('interaction_in_progress')) {
+        toast.error('A sign-in is already in progress. Please wait and try again.');
+        return;
       }
+      const message = err instanceof Error ? err.message : 'Sign-in failed';
+      toast.error(message);
     } finally {
       setOutlookLoading(false);
     }

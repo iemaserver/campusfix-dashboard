@@ -1,7 +1,8 @@
-﻿import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, GraduationCap, Mail, KeyRound, LogIn } from 'lucide-react';
-import { sendOtp, verifyOtp } from '@/services/api';
+import { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { ArrowLeft, Loader2, GraduationCap, Mail, Lock, LogIn } from 'lucide-react';
+import { msalInstance, popupRequest } from '@/lib/msal';
+import { studentLogin } from '@/services/api';
 import { toast } from 'sonner';
 
 const isAllowedStudentEmail = (value: string) => {
@@ -44,25 +45,19 @@ const StudentLogin = () => {
     }
   };
 
-  const handleOtpLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isAllowedStudentEmail(email)) {
-      toast.error('Please use your @uem.edu.in or @iem.edu.in email address');
-      return;
-    }
-    if (otp.trim().length !== 6) {
-      toast.error('Please enter the 6-digit OTP sent to your email');
-      return;
-    }
-
-    setVerifying(true);
+  const handleOutlookLogin = async () => {
+    if (outlookLoading) return;
+    setOutlookLoading(true);
     try {
-      const res = await verifyOtp(email.toLowerCase(), otp.trim());
-      localStorage.setItem('student_user', JSON.stringify(res.user));
-      toast.success(`Welcome back, ${res.user.name || res.user.email}!`);
-      navigate('/');
+      // Redirect to Microsoft login — main.tsx handles the response on return
+      await msalInstance.loginRedirect(popupRequest);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Login failed';
+      if (err instanceof Error && err.message?.includes('user_cancelled')) return;
+      if (err instanceof Error && err.message?.includes('interaction_in_progress')) {
+        toast.error('A sign-in is already in progress. Please wait and try again.');
+        return;
+      }
+      const message = err instanceof Error ? err.message : 'Sign-in failed';
       toast.error(message);
     } finally {
       setVerifying(false);

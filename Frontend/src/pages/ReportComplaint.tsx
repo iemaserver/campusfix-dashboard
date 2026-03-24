@@ -28,6 +28,8 @@ const ReportComplaint = () => {
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => fd.append(k, v));
       if (photo) fd.append('photo', photo);
+      const user = JSON.parse(localStorage.getItem('student_user') || '{}');
+      if (user.email) fd.append('student_email', user.email);
       await createComplaint(fd);
       toast.success('Complaint submitted successfully!');
       navigate('/track');

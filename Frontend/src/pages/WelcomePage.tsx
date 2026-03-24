@@ -1,92 +1,135 @@
 import { useNavigate } from 'react-router-dom';
-import { GraduationCap, Shield, ArrowRight, Wrench } from 'lucide-react';
+import { GraduationCap, Shield, ArrowRight, Wrench, CheckCircle2, Clock, TrendingUp, Bell, MapPin, Zap } from 'lucide-react';
+
+const features = [
+  {
+    icon: Wrench,
+    color: 'text-blue-500',
+    bg: 'bg-blue-500/10',
+    title: 'Report Issues',
+    desc: 'Submit infrastructure complaints with photos in seconds.',
+  },
+  {
+    icon: Clock,
+    color: 'text-amber-500',
+    bg: 'bg-amber-500/10',
+    title: 'Track Progress',
+    desc: 'Real-time status updates on every complaint you raise.',
+  },
+  {
+    icon: CheckCircle2,
+    color: 'text-emerald-500',
+    bg: 'bg-emerald-500/10',
+    title: 'Get Resolved',
+    desc: 'Issues are assigned and resolved by campus management.',
+  },
+  {
+    icon: Bell,
+    color: 'text-purple-500',
+    bg: 'bg-purple-500/10',
+    title: 'Stay Updated',
+    desc: 'Know when your complaint moves through each stage.',
+  },
+  {
+    icon: MapPin,
+    color: 'text-red-500',
+    bg: 'bg-red-500/10',
+    title: 'Pin Locations',
+    desc: 'Specify building, floor and room for precise resolution.',
+  },
+  {
+    icon: TrendingUp,
+    color: 'text-cyan-500',
+    bg: 'bg-cyan-500/10',
+    title: 'View Analytics',
+    desc: 'See resolution rates and recurring issues at a glance.',
+  },
+];
 
 const WelcomePage = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4 relative overflow-hidden">
-      {/* Decorative background blobs */}
-      <div className="absolute top-[-120px] left-[-120px] w-[420px] h-[420px] rounded-full bg-primary/10 blur-3xl pointer-events-none" />
-      <div className="absolute bottom-[-100px] right-[-100px] w-[360px] h-[360px] rounded-full bg-secondary/10 blur-3xl pointer-events-none" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-primary/5 blur-[80px] pointer-events-none" />
+    <div className="min-h-screen bg-background relative overflow-hidden">
+      {/* Background blobs */}
+      <div className="absolute top-[-160px] left-[-160px] w-[500px] h-[500px] rounded-full bg-primary/8 blur-3xl pointer-events-none" />
+      <div className="absolute bottom-[-120px] right-[-120px] w-[440px] h-[440px] rounded-full bg-secondary/8 blur-3xl pointer-events-none" />
+      <div className="absolute top-1/3 right-1/4 w-[300px] h-[300px] rounded-full bg-cyan-500/5 blur-[80px] pointer-events-none" />
 
-      <div className="relative z-10 w-full max-w-2xl text-center">
-        {/* Logos */}
-        <div className="flex items-center justify-center gap-4 mb-8">
-          <img
-            src="/assets/UEM_LOGO.png"
-            alt="UEM Logo"
-            className="h-16 w-16 object-contain drop-shadow-lg"
-          />
-          <div className="w-px h-12 bg-border/60" />
-          <img
-            src="/assets/IEM.png"
-            alt="IEM Logo"
-            className="h-16 w-16 object-contain drop-shadow-lg"
-          />
+      {/* Top bar — admin link lives here, very minimal */}
+      <div className="relative z-20 flex items-center justify-between px-6 sm:px-10 pt-5">
+        <div className="flex items-center gap-3">
+          <img src="/assets/UEM_LOGO.png" alt="UEM" className="h-9 w-9 object-contain drop-shadow-sm" />
+          <img src="/assets/IEM.png" alt="IEM" className="h-9 w-9 object-contain drop-shadow-sm" />
+          <span className="text-sm font-bold font-display text-gradient hidden sm:block">CampusFix</span>
+        </div>
+        <button
+          onClick={() => navigate('/manager-login')}
+          className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg hover:bg-muted/60"
+        >
+          <Shield className="h-3.5 w-3.5" />
+          Admin Login
+        </button>
+      </div>
+
+      {/* Hero */}
+      <div className="relative z-10 flex flex-col items-center text-center px-4 pt-16 pb-10 max-w-4xl mx-auto">
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-bold tracking-widest uppercase mb-6 border border-primary/20">
+          <Zap className="h-3.5 w-3.5" />
+          Smart Campus Platform
         </div>
 
-        {/* Title */}
-        <div className="mb-2">
-          <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-bold tracking-widest uppercase mb-4">
-            <Wrench className="h-3.5 w-3.5" />
-            Smart Campus Platform
-          </span>
-        </div>
-        <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold font-display text-gradient leading-tight mb-3">
-          UEM Complaint
+        <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold font-display text-gradient leading-tight mb-5">
+          Campus Infrastructure
           <br />
-          Management System
+          Made&nbsp;Accountable
         </h1>
-        <p className="text-muted-foreground text-sm sm:text-base max-w-md mx-auto mb-12 leading-relaxed">
-          Report, track and resolve campus infrastructure issues — fast and transparently.
+
+        <p className="text-muted-foreground text-base sm:text-lg max-w-xl mx-auto mb-10 leading-relaxed">
+          Report broken lights, leaky taps, faulty furniture and more — right from your phone.
+          The right team gets notified instantly.
         </p>
 
-        {/* Login cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          {/* Student */}
-          <button
-            onClick={() => navigate('/student-login')}
-            className="group relative bg-card border border-border/40 rounded-3xl p-8 text-left shadow-card hover:shadow-card-hover hover:-translate-y-1 transition-all duration-500 overflow-hidden"
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/8 via-cyan-500/4 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-            <div className="relative">
-              <div className="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300">
-                <GraduationCap className="h-7 w-7 text-blue-500" />
-              </div>
-              <h2 className="text-lg font-bold font-display text-foreground mb-1">Student Login</h2>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Sign in with your university email via OTP verification.
-              </p>
-              <div className="mt-5 flex items-center gap-1.5 text-sm font-semibold text-blue-500">
-                Get Started <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-              </div>
-            </div>
-          </button>
+        {/* Primary CTA */}
+        <button
+          onClick={() => navigate('/student-login')}
+          className="group relative inline-flex items-center gap-3 gradient-primary text-primary-foreground px-10 py-4 rounded-2xl text-base font-bold shadow-button hover:opacity-90 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 mb-4"
+        >
+          <GraduationCap className="h-5 w-5" />
+          Student Login
+          <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+        </button>
 
-          {/* Manager */}
-          <button
-            onClick={() => navigate('/manager-login')}
-            className="group relative bg-card border border-border/40 rounded-3xl p-8 text-left shadow-card hover:shadow-card-hover hover:-translate-y-1 transition-all duration-500 overflow-hidden"
-          >
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/8 via-indigo-500/4 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-            <div className="relative">
-              <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300">
-                <Shield className="h-7 w-7 text-primary" />
+        <p className="text-xs text-muted-foreground">
+          Use your <span className="font-semibold text-foreground/70">@uem.edu.in</span> or <span className="font-semibold text-foreground/70">@iem.edu.in</span> email · OTP verification
+        </p>
+      </div>
+
+      {/* Feature grid */}
+      <div className="relative z-10 max-w-5xl mx-auto px-4 pb-16">
+        <p className="text-center text-xs font-bold tracking-widest uppercase text-muted-foreground mb-8">
+          Everything you need
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {features.map((f, i) => (
+            <div
+              key={f.title}
+              className="group bg-card/70 backdrop-blur-sm border border-border/40 rounded-2xl p-5 shadow-card hover:shadow-card-hover hover:-translate-y-0.5 transition-all duration-300 animate-slide-up"
+              style={{ animationDelay: `${i * 60}ms` }}
+            >
+              <div className={`w-10 h-10 rounded-xl ${f.bg} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300`}>
+                <f.icon className={`h-5 w-5 ${f.color}`} />
               </div>
-              <h2 className="text-lg font-bold font-display text-foreground mb-1">Manager Login</h2>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Admin &amp; facility managers — sign in with your credentials.
-              </p>
-              <div className="mt-5 flex items-center gap-1.5 text-sm font-semibold text-primary">
-                Sign In <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-              </div>
+              <h3 className="text-sm font-bold text-foreground mb-1">{f.title}</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">{f.desc}</p>
             </div>
-          </button>
+          ))}
         </div>
+      </div>
 
-        <p className="mt-8 text-xs text-muted-foreground/60">
+      {/* Footer */}
+      <div className="relative z-10 text-center pb-8">
+        <p className="text-xs text-muted-foreground/50">
           © 2026 University of Engineering &amp; Management · CampusFix
         </p>
       </div>

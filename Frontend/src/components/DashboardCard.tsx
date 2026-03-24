@@ -27,12 +27,14 @@ const DashboardCard = ({ title, value, icon: Icon, trend, className, iconBg, del
         <div className="space-y-3">
           <p className="text-sm font-medium text-muted-foreground tracking-wide uppercase">{title}</p>
           <p className="text-4xl font-bold font-display text-card-foreground tracking-tight">{value}</p>
-          {trend && (
-            <p className="text-xs text-status-completed font-semibold flex items-center gap-1">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-status-completed" />
-              {trend}
-            </p>
-          )}
+          <p className="text-xs text-status-completed font-semibold flex items-center gap-1 min-h-[1rem]">
+            {trend && (
+              <>
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-status-completed" />
+                {trend}
+              </>
+            )}
+          </p>
         </div>
         <div className={cn(
           'p-3.5 rounded-2xl transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3',

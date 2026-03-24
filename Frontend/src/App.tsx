@@ -12,7 +12,6 @@ import WelcomePage from "./pages/WelcomePage";
 import StudentLogin from "./pages/StudentLogin";
 import StudentRegister from "./pages/StudentRegister";
 import ManagerLogin from "./pages/ManagerLogin";
-
 import AppLayout from "./layout/AppLayout";
 import NotFound from "./pages/NotFound";
 
@@ -23,21 +22,32 @@ const ADMIN_SESSION_KEY = 'admin_session';
 const hasActiveAdminSession = () => {
   const session = localStorage.getItem(ADMIN_SESSION_KEY);
   if (!session) return false;
-
   const expiry = Number(session);
   if (Number.isNaN(expiry) || Date.now() >= expiry) {
     localStorage.removeItem(ADMIN_SESSION_KEY);
     return false;
   }
-
   return true;
 };
 
-// Guard: allow student or admin session; otherwise redirect to welcome
-const RequireAppAccess = ({ children }: { children: React.ReactNode }) => {
-  const hasStudent = Boolean(localStorage.getItem('student_user'));
-  const hasAdmin = hasActiveAdminSession();
-  return hasStudent || hasAdmin ? <>{children}</> : <Navigate to="/welcome" replace />;
+// Student-only routes: admins get redirected to /admin
+const RequireStudent = ({ children }: { children: React.ReactNode }) => {
+  if (hasActiveAdminSession()) return <Navigate to="/admin" replace />;
+  if (!localStorage.getItem('student_user')) return <Navigate to="/welcome" replace />;
+  return <>{children}</>;
+};
+
+// Admin-only routes: non-admins get redirected to /manager-login
+const RequireAdmin = ({ children }: { children: React.ReactNode }) => {
+  if (!hasActiveAdminSession()) return <Navigate to="/manager-login" replace />;
+  return <>{children}</>;
+};
+
+// Shared routes accessible by either role (e.g. complaint detail)
+const RequireAnyAuth = ({ children }: { children: React.ReactNode }) => {
+  if (!hasActiveAdminSession() && !localStorage.getItem('student_user'))
+    return <Navigate to="/welcome" replace />;
+  return <>{children}</>;
 };
 
 const App = () => (
@@ -55,11 +65,14 @@ const App = () => (
 
           {/* App routes (with navbar) */}
           <Route element={<AppLayout />}>
-            <Route path="/" element={<RequireAppAccess><StudentDashboard /></RequireAppAccess>} />
-            <Route path="/report" element={<RequireAppAccess><ReportComplaint /></RequireAppAccess>} />
-            <Route path="/track" element={<RequireAppAccess><TrackComplaints /></RequireAppAccess>} />
-            <Route path="/complaints/:id" element={<RequireAppAccess><ComplaintDetails /></RequireAppAccess>} />
-            <Route path="/admin" element={<AdminDashboard />} />
+            {/* Student-only routes */}
+            <Route path="/" element={<RequireStudent><StudentDashboard /></RequireStudent>} />
+            <Route path="/report" element={<RequireStudent><ReportComplaint /></RequireStudent>} />
+            <Route path="/track" element={<RequireStudent><TrackComplaints /></RequireStudent>} />
+            <Route path="/complaints/:id" element={<RequireAnyAuth><ComplaintDetails /></RequireAnyAuth>} />
+
+            {/* Admin-only route */}
+            <Route path="/admin" element={<RequireAdmin><AdminDashboard /></RequireAdmin>} />
           </Route>
 
           <Route path="*" element={<NotFound />} />

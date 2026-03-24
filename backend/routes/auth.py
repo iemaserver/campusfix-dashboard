@@ -18,9 +18,22 @@ SMTP_PORT = int(os.getenv("OUTLOOK_PORT", 587))
 SMTP_USER = os.getenv("OUTLOOK_EMAIL", "")
 SMTP_PASS = os.getenv("OUTLOOK_PASSWORD", "")
 
-# ── Admin config from .env ───────────────────────────────────────────────────
-ADMIN_EMAIL    = os.getenv("ADMIN_EMAIL", "admin@gmail.com")
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
+# ── Admin accounts from .env (ADMIN_1_, ADMIN_2_, …) ─────────────────────────
+def _load_admins() -> list[dict]:
+    admins, i = [], 1
+    while True:
+        email = os.getenv(f"ADMIN_{i}_EMAIL")
+        if not email:
+            break
+        admins.append({
+            "email":    email.strip().lower(),
+            "password": os.getenv(f"ADMIN_{i}_PASSWORD", ""),
+            "name":     os.getenv(f"ADMIN_{i}_NAME", "Admin"),
+        })
+        i += 1
+    return admins
+
+ADMINS = _load_admins()
 
 # ── Collections ──────────────────────────────────────────────────────────────
 students_collection = db["students"]
@@ -306,16 +319,17 @@ def microsoft_login():
 
 @auth_bp.route("/auth/admin-login", methods=["POST"])
 def admin_login():
-    """Validate admin credentials from .env."""
+    """Validate admin credentials against all accounts defined in .env."""
     data     = request.get_json(silent=True) or {}
-    email    = data.get("email",    "")
+    email    = data.get("email",    "").strip().lower()
     password = data.get("password", "")
 
-    if email == ADMIN_EMAIL and password == ADMIN_PASSWORD:
-        return jsonify({
-            "success": True,
-            "message": "Login successful",
-            "user": {"email": email, "role": "admin", "name": "Admin"},
-        }), 200
+    for admin in ADMINS:
+        if email == admin["email"] and password == admin["password"]:
+            return jsonify({
+                "success": True,
+                "message": "Login successful",
+                "user": {"email": email, "role": "admin", "name": admin["name"]},
+            }), 200
 
     return jsonify({"error": "Invalid admin credentials"}), 401

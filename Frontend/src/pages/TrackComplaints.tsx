@@ -1,18 +1,28 @@
 import { useEffect, useState } from 'react';
 import { getComplaints } from '@/services/api';
 import ComplaintCard from '@/components/ComplaintCard';
-import { Search, SlidersHorizontal } from 'lucide-react';
+import { AcceptFeedbackModal, ReopenModal } from '@/components/AcceptReopenModals';
+import { Search, SlidersHorizontal, CheckCircle, RotateCcw } from 'lucide-react';
 
 const TrackComplaints = () => {
   const [complaints, setComplaints] = useState<any[]>([]);
-  const [filter, setFilter] = useState('All');
-  const [search, setSearch] = useState('');
+  const [filter, setFilter]         = useState('All');
+  const [search, setSearch]         = useState('');
+  const [accepting, setAccepting]   = useState<any | null>(null);
+  const [reopening, setReopening]   = useState<any | null>(null);
+
+  const user = JSON.parse(localStorage.getItem('student_user') || '{}');
+  const studentName = user.name || user.email?.split('@')[0] || 'Student';
 
   useEffect(() => {
-    getComplaints().then(setComplaints);
+    getComplaints(user.email).then(setComplaints);
   }, []);
 
-  const statuses = ['All', 'Submitted', 'Assigned', 'In Progress', 'Completed'];
+  const handleActionDone = (id: string, newStatus: string) => {
+    setComplaints(prev => prev.map(c => c._id === id ? { ...c, status: newStatus } : c));
+  };
+
+  const statuses = ['All', 'Submitted', 'Assigned', 'In Progress', 'Pending Acceptance', 'Reopened', 'Completed'];
 
   const filtered = complaints.filter(c => {
     const matchStatus = filter === 'All' || c.status === filter;
@@ -23,6 +33,24 @@ const TrackComplaints = () => {
 
   return (
     <div>
+      {/* Modals */}
+      {accepting && (
+        <AcceptFeedbackModal
+          complaint={accepting}
+          studentName={studentName}
+          onClose={() => setAccepting(null)}
+          onDone={id => { handleActionDone(id, 'Completed'); }}
+        />
+      )}
+      {reopening && (
+        <ReopenModal
+          complaint={reopening}
+          studentName={studentName}
+          onClose={() => setReopening(null)}
+          onDone={id => { handleActionDone(id, 'Reopened'); }}
+        />
+      )}
+
       {/* Header */}
       <div className="mb-8 animate-slide-up">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary/10 text-secondary text-xs font-semibold mb-3">
@@ -70,6 +98,25 @@ const TrackComplaints = () => {
         {filtered.map((c, i) => (
           <div key={c._id} className="animate-slide-up" style={{ animationDelay: `${200 + i * 80}ms` }}>
             <ComplaintCard complaint={c} />
+            {/* Action row for Pending Acceptance */}
+            {c.status === 'Pending Acceptance' && (
+              <div className="flex gap-2 mt-2 px-1">
+                <button
+                  onClick={() => setAccepting(c)}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 text-xs font-semibold transition-all border border-emerald-500/20"
+                >
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  Accept Fix
+                </button>
+                <button
+                  onClick={() => setReopening(c)}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 text-xs font-semibold transition-all border border-amber-500/20"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Reopen
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>

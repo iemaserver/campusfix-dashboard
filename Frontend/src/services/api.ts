@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const API = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: '/api',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -58,13 +58,13 @@ export const login = async (email: string, password: string) => {
   return res.data;
 };
 
-export const getDashboardStats = async () => {
-  const res = await API.get('/dashboard');
+export const getDashboardStats = async (studentEmail?: string) => {
+  const res = await API.get('/dashboard', { params: studentEmail ? { student_email: studentEmail } : {} });
   return res.data;
 };
 
-export const getComplaints = async () => {
-  const res = await API.get('/complaints');
+export const getComplaints = async (studentEmail?: string) => {
+  const res = await API.get('/complaints', { params: studentEmail ? { student_email: studentEmail } : {} });
   return res.data;
 };
 
@@ -85,18 +85,44 @@ export const getAdminComplaints = async () => {
   return res.data;
 };
 
-export const updateComplaintStatus = async (id: string, status: string) => {
-  const res = await API.put(`/complaints/${id}/status`, { status });
+export const updateComplaintStatus = async (id: string, status: string, adminName?: string) => {
+  const res = await API.put(`/complaints/${id}/status`, { status, ...(adminName ? { admin_name: adminName } : {}) });
   return res.data;
 };
 
-export const upvoteComplaint = async (id: string) => {
-  const res = await API.post(`/complaints/${id}/upvote`);
-  return res.data;
-};
 
 export const getRecurringComplaints = async () => {
   const res = await API.get('/complaints/recurring');
+  return res.data;
+};
+
+export const getAuthorities = async (category?: string) => {
+  const res = await API.get('/authorities', { params: category ? { category } : {} });
+  return res.data;
+};
+
+export const addAuthority = async (data: { name: string; email: string; phone: string; category: string }) => {
+  const res = await API.post('/authorities', data);
+  return res.data;
+};
+
+export const deleteAuthority = async (id: string) => {
+  const res = await API.delete(`/authorities/${id}`);
+  return res.data;
+};
+
+export const assignComplaint = async (complaintId: string, authorityId: string, adminName: string) => {
+  const res = await API.post(`/complaints/${complaintId}/assign`, { authority_id: authorityId, admin_name: adminName });
+  return res.data;
+};
+
+export const acceptFix = async (complaintId: string, feedback: string, studentName: string) => {
+  const res = await API.post(`/complaints/${complaintId}/accept`, { feedback, student_name: studentName });
+  return res.data;
+};
+
+export const reopenComplaint = async (complaintId: string, reason: string, studentName: string) => {
+  const res = await API.post(`/complaints/${complaintId}/reopen`, { reason, student_name: studentName });
   return res.data;
 };
 

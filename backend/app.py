@@ -14,14 +14,14 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app = Flask(__name__)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+CORS(app, resources={r"/campusfix/api/*": {"origins": "*"}})
 
-# Register blueprints under /api prefix
-app.register_blueprint(complaints_bp, url_prefix="/api")
-app.register_blueprint(admin_bp, url_prefix="/api")
-app.register_blueprint(dashboard_bp, url_prefix="/api")
-app.register_blueprint(auth_bp, url_prefix="/api")
-app.register_blueprint(authorities_bp, url_prefix="/api")
+# Register blueprints under /campusfix/api prefix
+app.register_blueprint(complaints_bp, url_prefix="/campusfix/api")
+app.register_blueprint(admin_bp, url_prefix="/campusfix/api")
+app.register_blueprint(dashboard_bp, url_prefix="/campusfix/api")
+app.register_blueprint(auth_bp, url_prefix="/campusfix/api")
+app.register_blueprint(authorities_bp, url_prefix="/campusfix/api")
 
 
 @app.route("/")
@@ -29,7 +29,7 @@ def index():
     return {"message": "CampusFix API is running"}
 
 
-@app.route("/uploads/<path:filename>")
+@app.route("/campusfix/uploads/<path:filename>")
 def uploaded_file(filename):
     return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
 

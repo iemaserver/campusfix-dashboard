@@ -85,8 +85,12 @@ export const getAdminComplaints = async () => {
   return res.data;
 };
 
-export const updateComplaintStatus = async (id: string, status: string, adminName?: string) => {
-  const res = await API.put(`/complaints/${id}/status`, { status, ...(adminName ? { admin_name: adminName } : {}) });
+export const updateComplaintStatus = async (id: string, status: string, adminName?: string, adminEmail?: string) => {
+  const res = await API.put(`/complaints/${id}/status`, {
+    status,
+    ...(adminName ? { admin_name: adminName } : {}),
+    ...(adminEmail ? { admin_email: adminEmail } : {}),
+  });
   return res.data;
 };
 
@@ -116,13 +120,13 @@ export const assignComplaint = async (complaintId: string, authorityId: string, 
   return res.data;
 };
 
-export const acceptFix = async (complaintId: string, feedback: string, studentName: string) => {
-  const res = await API.post(`/complaints/${complaintId}/accept`, { feedback, student_name: studentName });
+export const acceptFix = async (complaintId: string, feedback: string, studentName: string, studentEmail: string) => {
+  const res = await API.post(`/complaints/${complaintId}/accept`, { feedback, student_name: studentName, student_email: studentEmail });
   return res.data;
 };
 
-export const reopenComplaint = async (complaintId: string, reason: string, studentName: string) => {
-  const res = await API.post(`/complaints/${complaintId}/reopen`, { reason, student_name: studentName });
+export const reopenComplaint = async (complaintId: string, reason: string, studentName: string, studentEmail: string) => {
+  const res = await API.post(`/complaints/${complaintId}/reopen`, { reason, student_name: studentName, student_email: studentEmail });
   return res.data;
 };
 

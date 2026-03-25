@@ -368,7 +368,7 @@ const AdminDashboard = () => {
 
   const handleResolve = async (id: string) => {
     try {
-      await updateComplaintStatus(id, 'Pending Acceptance', adminName);
+      await updateComplaintStatus(id, 'Pending Acceptance', adminName, adminUser?.email);
       setComplaints(prev => prev.map(x => x._id === id ? { ...x, status: 'Pending Acceptance' } : x));
       toast.success('Marked as resolved — student notified to accept the fix');
     } catch {

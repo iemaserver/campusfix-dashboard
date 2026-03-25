@@ -25,6 +25,22 @@ def _allowed_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+def _is_admin_email(email: str) -> bool:
+    """Return True if the email matches any configured admin."""
+    if not email:
+        return False
+    email = email.strip().lower()
+    i = 1
+    while True:
+        admin_email = os.getenv(f"ADMIN_{i}_EMAIL")
+        if not admin_email:
+            break
+        if email == admin_email.strip().lower():
+            return True
+        i += 1
+    return False
+
+
 complaints_bp = Blueprint("complaints", __name__)
 
 ALLOWED_STATUSES = {"Submitted", "Assigned", "In Progress", "Completed", "Pending Acceptance", "Reopened"}
@@ -113,6 +129,10 @@ def update_status(complaint_id):
     data = request.get_json(silent=True) or {}
     new_status = data.get("status")
     admin_name = data.get("admin_name", "")
+    admin_email = data.get("admin_email", "").strip().lower()
+
+    if not _is_admin_email(admin_email):
+        return jsonify({"error": "Forbidden"}), 403
 
     if new_status not in ALLOWED_STATUSES:
         return jsonify({"error": f"Invalid status. Allowed: {', '.join(ALLOWED_STATUSES)}"}), 400
@@ -218,6 +238,20 @@ def accept_complaint(complaint_id):
     data = request.get_json(silent=True) or {}
     feedback = data.get("feedback", "").strip()
     student_name = data.get("student_name", "Student")
+    student_email = data.get("student_email", "").strip().lower()
+
+    if not student_email:
+        return jsonify({"error": "student_email is required"}), 400
+
+    doc = complaints_collection.find_one({"_id": ObjectId(complaint_id)})
+    if not doc:
+        return jsonify({"error": "Complaint not found"}), 404
+
+    if doc.get("student_email", "").lower() != student_email:
+        return jsonify({"error": "Forbidden"}), 403
+
+    if doc.get("status") != "Pending Acceptance":
+        return jsonify({"error": "Complaint is not awaiting acceptance"}), 409
 
     now = datetime.now(timezone.utc)
     result = complaints_collection.update_one(
@@ -254,9 +288,23 @@ def reopen_complaint(complaint_id):
     data = request.get_json(silent=True) or {}
     reason = data.get("reason", "").strip()
     student_name = data.get("student_name", "Student")
+    student_email = data.get("student_email", "").strip().lower()
+
+    if not student_email:
+        return jsonify({"error": "student_email is required"}), 400
 
     if not reason:
         return jsonify({"error": "A reason is required to reopen the complaint."}), 400
+
+    doc = complaints_collection.find_one({"_id": ObjectId(complaint_id)})
+    if not doc:
+        return jsonify({"error": "Complaint not found"}), 404
+
+    if doc.get("student_email", "").lower() != student_email:
+        return jsonify({"error": "Forbidden"}), 403
+
+    if doc.get("status") != "Pending Acceptance":
+        return jsonify({"error": "Complaint is not awaiting acceptance"}), 409
 
     now = datetime.now(timezone.utc)
     result = complaints_collection.update_one(

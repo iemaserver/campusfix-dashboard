@@ -61,8 +61,8 @@ const Navbar = () => {
           {/* Logo */}
           <Link to={isAdminLoggedIn ? '/admin' : '/'} className="flex items-center gap-3 group">
             <div className="flex items-center gap-2">
-              <img src="/assets/UEM_LOGO.png" alt="University Logo" className="h-10 w-10 object-contain drop-shadow-sm" />
-              <img src="/assets/IEM.png" alt="CampusFix Logo" className="h-10 w-10 object-contain drop-shadow-sm" />
+              <img src="/assets/IEM.png" alt="IEM Logo" className="h-10 w-10 object-contain drop-shadow-sm" />
+              <img src="/assets/UEM_LOGO.png" alt="UEM Logo" className="h-10 w-10 object-contain drop-shadow-sm" />
             </div>
             <div className="hidden sm:block">
               <span className="text-lg font-bold font-display text-gradient">CampusFix</span>

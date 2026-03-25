@@ -128,9 +128,18 @@ const WelcomePage = () => {
       </div>
 
       {/* Footer */}
-      <div className="relative z-10 text-center pb-8">
+      <div className="relative z-10 text-center pb-8 px-4 space-y-1">
         <p className="text-xs text-muted-foreground/50">
           © 2026 University of Engineering &amp; Management · CampusFix
+        </p>
+        <p className="text-xs text-muted-foreground/40">
+          Developed at CSE AI IEDC Lab by{' '}
+          <a href="https://www.linkedin.com/in/mdasif2003/" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-muted-foreground transition-colors">MD Asif</a>,{' '}
+          <a href="https://www.linkedin.com/in/pratyaychatterjee/" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-muted-foreground transition-colors">Pratyay Chatterjee</a> and{' '}
+          <a href="https://www.linkedin.com/in/prakash-metla-921050253" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-muted-foreground transition-colors">Prakash Metla</a>{' '}
+          under the guidance of{' '}
+          <a href="https://www.linkedin.com/in/sudipta-sahana-3843321a/" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-muted-foreground transition-colors">Dr. Sudipta Sahana</a> and{' '}
+          <a href="https://www.linkedin.com/in/susmitamukherjee-environmentalist/" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-muted-foreground transition-colors">Dr. Susmita Mukherjee</a>
         </p>
       </div>
     </div>

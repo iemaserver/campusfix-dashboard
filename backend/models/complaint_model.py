@@ -1,9 +1,19 @@
+import uuid
 from datetime import datetime, timezone
+
+
+def generate_ticket_number() -> str:
+    now = datetime.now(timezone.utc)
+    suffix = uuid.uuid4().hex[:5].upper()
+    return f"CF-{now.strftime('%Y%m')}-{suffix}"
 
 
 def create_complaint_doc(data):
     """Build a complaint document for MongoDB insertion."""
+    now = datetime.now(timezone.utc)
     return {
+        "ticket_number": generate_ticket_number(),
+        "student_email": data.get("student_email", ""),
         "category": data.get("category", ""),
         "building": data.get("building", ""),
         "floor": data.get("floor", ""),
@@ -11,7 +21,7 @@ def create_complaint_doc(data):
         "description": data.get("description", ""),
         "photo_url": data.get("photo_url", ""),
         "status": "Submitted",
-        "upvotes": 0,
-        "created_at": datetime.now(timezone.utc),
-        "updated_at": datetime.now(timezone.utc),
+        "status_history": [{"status": "Submitted", "timestamp": now}],
+        "created_at": now,
+        "updated_at": now,
     }

@@ -7,3 +7,4 @@ db = client[DB_NAME]
 
 complaints_collection = db["complaints"]
 admins_collection = db["admins"]
+authorities_collection = db["authorities"]

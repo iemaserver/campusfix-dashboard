@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, FileWarning, ListChecks, Shield, Wrench, Menu, X, Sun, Moon, LogOut } from 'lucide-react';
+import { LayoutDashboard, FileWarning, ListChecks, Shield, Menu, X, Sun, Moon, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const navItems = [
+const studentNavItems = [
   { label: 'Dashboard', path: '/', icon: LayoutDashboard },
   { label: 'Report Issue', path: '/report', icon: FileWarning },
   { label: 'Track', path: '/track', icon: ListChecks },
+];
+
+const adminNavItems = [
   { label: 'Admin', path: '/admin', icon: Shield },
 ];
 
@@ -22,24 +25,29 @@ const Navbar = () => {
   const isAdminLoggedIn = (() => {
     const session = localStorage.getItem(ADMIN_SESSION_KEY);
     if (!session) return false;
-
     const expiry = Number(session);
     if (Number.isNaN(expiry) || Date.now() >= expiry) {
       localStorage.removeItem(ADMIN_SESSION_KEY);
       return false;
     }
-
     return true;
   })();
 
-  const visibleNavItems = studentUser && !isAdminLoggedIn
-    ? navItems.filter((item) => item.path !== '/admin')
-    : navItems;
+  // Admin takes full precedence — student tabs are completely hidden for admins
+  const visibleNavItems = isAdminLoggedIn ? adminNavItems : studentNavItems;
 
   const handleLogout = () => {
-    localStorage.removeItem('student_user');
+    if (isAdminLoggedIn) {
+      localStorage.removeItem(ADMIN_SESSION_KEY);
+      localStorage.removeItem('admin_user');
+    } else {
+      localStorage.removeItem('student_user');
+    }
     navigate('/welcome');
   };
+
+  const adminUser = JSON.parse(localStorage.getItem('admin_user') || 'null');
+  const displayName = isAdminLoggedIn ? (adminUser?.name ?? 'Admin') : studentUser?.name ?? '';
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
@@ -51,11 +59,9 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-3 group">
+          <Link to={isAdminLoggedIn ? '/admin' : '/'} className="flex items-center gap-3 group">
             <div className="flex items-center gap-2">
-              <div className="relative">
-                <img src="/assets/UEM_LOGO.png" alt="University Logo" className="h-10 w-10 object-contain drop-shadow-sm" />
-              </div>
+              <img src="/assets/UEM_LOGO.png" alt="University Logo" className="h-10 w-10 object-contain drop-shadow-sm" />
               <img src="/assets/IEM.png" alt="CampusFix Logo" className="h-10 w-10 object-contain drop-shadow-sm" />
             </div>
             <div className="hidden sm:block">
@@ -86,13 +92,12 @@ const Navbar = () => {
             })}
           </nav>
 
-          {/* Dark mode toggle + logout + Mobile menu */}
+          {/* Right side */}
           <div className="flex items-center gap-1">
-            {/* Student greeting + logout */}
-            {studentUser && (
+            {displayName && (
               <div className="hidden sm:flex items-center gap-2 mr-1">
                 <span className="text-xs font-medium text-muted-foreground">
-                  Hi, {studentUser.name}
+                  Hi, {displayName}
                 </span>
                 <button
                   onClick={handleLogout}
@@ -112,7 +117,6 @@ const Navbar = () => {
               {dark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
 
-            {/* Mobile menu button */}
             <button
               onClick={() => setMobileOpen(!mobileOpen)}
               className="md:hidden p-2.5 rounded-xl text-muted-foreground hover:bg-muted transition-colors"
@@ -146,6 +150,15 @@ const Navbar = () => {
                 </Link>
               );
             })}
+            {displayName && (
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-destructive hover:bg-destructive/10 w-full transition-all"
+              >
+                <LogOut className="h-4 w-4" />
+                Logout
+              </button>
+            )}
           </div>
         </div>
       )}

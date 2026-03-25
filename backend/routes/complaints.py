@@ -8,6 +8,15 @@ from werkzeug.utils import secure_filename
 from db import complaints_collection
 from models.complaint_model import create_complaint_doc
 from utils.helpers import serialize_complaint, is_valid_object_id
+from utils.email_queue import (
+    send_complaint_raised_to_student,
+    send_complaint_raised_to_admins,
+    send_authority_assigned,
+    send_pending_acceptance,
+    send_fix_accepted_to_admins,
+    send_reopened_to_admins,
+    send_sms_assignment,
+)
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 
@@ -15,16 +24,16 @@ ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 def _allowed_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
+
 complaints_bp = Blueprint("complaints", __name__)
 
-ALLOWED_STATUSES = {"Submitted", "Assigned", "In Progress", "Completed"}
+ALLOWED_STATUSES = {"Submitted", "Assigned", "In Progress", "Completed", "Pending Acceptance", "Reopened"}
 
 
 @complaints_bp.route("/complaints", methods=["POST"])
 def create_complaint():
     """Create a new complaint."""
     try:
-        # Support both JSON and form-data (the frontend sends FormData)
         if request.content_type and "multipart/form-data" in request.content_type:
             data = request.form.to_dict()
         else:
@@ -43,11 +52,17 @@ def create_complaint():
                 ext = secure_filename(file.filename).rsplit(".", 1)[1].lower()
                 unique_name = f"{uuid.uuid4().hex}.{ext}"
                 file.save(os.path.join(current_app.config["UPLOAD_FOLDER"], unique_name))
-                photo_url = f"http://localhost:5000/uploads/{unique_name}"
+                photo_url = f"/uploads/{unique_name}"
         data["photo_url"] = photo_url
 
         doc = create_complaint_doc(data)
         result = complaints_collection.insert_one(doc)
+
+        # Build serialisable version for email (doc doesn't have _id yet)
+        doc["_id"] = result.inserted_id
+        c = serialize_complaint(doc)
+        send_complaint_raised_to_student(c)
+        send_complaint_raised_to_admins(c)
 
         return jsonify({
             "success": True,
@@ -63,6 +78,8 @@ def create_complaint():
 def get_complaints():
     """Return all complaints with optional filters."""
     query = {}
+    if request.args.get("student_email"):
+        query["student_email"] = request.args["student_email"].strip().lower()
     if request.args.get("status"):
         query["status"] = request.args["status"]
     if request.args.get("category"):
@@ -95,37 +112,177 @@ def update_status(complaint_id):
 
     data = request.get_json(silent=True) or {}
     new_status = data.get("status")
+    admin_name = data.get("admin_name", "")
 
     if new_status not in ALLOWED_STATUSES:
         return jsonify({"error": f"Invalid status. Allowed: {', '.join(ALLOWED_STATUSES)}"}), 400
 
+    now = datetime.now(timezone.utc)
+    history_entry = {"status": new_status, "timestamp": now}
+    if admin_name:
+        history_entry["admin_name"] = admin_name
+
     result = complaints_collection.update_one(
         {"_id": ObjectId(complaint_id)},
-        {"$set": {"status": new_status, "updated_at": datetime.now(timezone.utc)}},
+        {
+            "$set": {"status": new_status, "updated_at": now},
+            "$push": {"status_history": history_entry},
+        },
     )
 
     if result.matched_count == 0:
         return jsonify({"error": "Complaint not found"}), 404
+
+    # Send student email when admin marks pending acceptance
+    if new_status == "Pending Acceptance":
+        doc = complaints_collection.find_one({"_id": ObjectId(complaint_id)})
+        if doc:
+            send_pending_acceptance(serialize_complaint(doc))
 
     return jsonify({"success": True, "message": f"Status updated to {new_status}"}), 200
 
 
-@complaints_bp.route("/complaints/<complaint_id>/upvote", methods=["POST"])
-def upvote_complaint(complaint_id):
-    """Increment the upvote count of a complaint."""
+@complaints_bp.route("/complaints/<complaint_id>/assign", methods=["POST"])
+def assign_complaint(complaint_id):
+    """Assign a complaint to an authority and set status to Assigned."""
     if not is_valid_object_id(complaint_id):
         return jsonify({"error": "Invalid complaint ID"}), 400
 
+    data = request.get_json(silent=True) or {}
+    authority_id = data.get("authority_id", "")
+    admin_name = data.get("admin_name", "Admin")
+
+    if not is_valid_object_id(authority_id):
+        return jsonify({"error": "Valid authority_id required"}), 400
+
+    from db import authorities_collection
+    authority = authorities_collection.find_one({"_id": ObjectId(authority_id)})
+    if not authority:
+        return jsonify({"error": "Authority not found"}), 404
+
+    now = datetime.now(timezone.utc)
+    assigned_to = {
+        "authority_id": str(authority["_id"]),
+        "name": authority.get("name", ""),
+        "email": authority.get("email", ""),
+        "phone": authority.get("phone", ""),
+        "category": authority.get("category", ""),
+        "assigned_at": now,
+        "assigned_by": admin_name,
+    }
+
     result = complaints_collection.update_one(
         {"_id": ObjectId(complaint_id)},
-        {"$inc": {"upvotes": 1}},
+        {
+            "$set": {"status": "Assigned", "assigned_to": assigned_to, "updated_at": now},
+            "$push": {"status_history": {
+                "status": "Assigned",
+                "timestamp": now,
+                "authority_name": authority.get("name", ""),
+                "admin_name": admin_name,
+            }},
+        },
     )
+    if result.matched_count == 0:
+        return jsonify({"error": "Complaint not found"}), 404
 
+    # Email student and SMS authority about assignment
+    doc = complaints_collection.find_one({"_id": ObjectId(complaint_id)})
+    if doc:
+        c = serialize_complaint(doc)
+        send_authority_assigned(c)
+        send_sms_assignment(
+            authority_phone=authority.get("phone", ""),
+            authority_name=authority.get("name", ""),
+            ticket_number=c["ticket_number"],
+            category=c["category"],
+            location=c["location"],
+            assigned_by=admin_name,
+        )
+
+    return jsonify({
+        "success": True,
+        "assigned_to": {
+            **{k: v for k, v in assigned_to.items() if k != "assigned_at"},
+            "assigned_at": now.isoformat() + "+00:00",
+        },
+    }), 200
+
+
+@complaints_bp.route("/complaints/<complaint_id>/accept", methods=["POST"])
+def accept_complaint(complaint_id):
+    """Student accepts the fix and provides feedback."""
+    if not is_valid_object_id(complaint_id):
+        return jsonify({"error": "Invalid complaint ID"}), 400
+
+    data = request.get_json(silent=True) or {}
+    feedback = data.get("feedback", "").strip()
+    student_name = data.get("student_name", "Student")
+
+    now = datetime.now(timezone.utc)
+    result = complaints_collection.update_one(
+        {"_id": ObjectId(complaint_id)},
+        {
+            "$set": {
+                "status": "Completed",
+                "student_feedback": feedback,
+                "updated_at": now,
+            },
+            "$push": {"status_history": {
+                "status": "Completed",
+                "timestamp": now,
+                "student_name": student_name,
+            }},
+        },
+    )
     if result.matched_count == 0:
         return jsonify({"error": "Complaint not found"}), 404
 
     doc = complaints_collection.find_one({"_id": ObjectId(complaint_id)})
-    return jsonify({"success": True, "upvotes": doc.get("upvotes", 0)}), 200
+    if doc:
+        send_fix_accepted_to_admins(serialize_complaint(doc), feedback, student_name)
+
+    return jsonify({"success": True, "message": "Fix accepted. Complaint closed."}), 200
+
+
+@complaints_bp.route("/complaints/<complaint_id>/reopen", methods=["POST"])
+def reopen_complaint(complaint_id):
+    """Student reopens the complaint with a reason."""
+    if not is_valid_object_id(complaint_id):
+        return jsonify({"error": "Invalid complaint ID"}), 400
+
+    data = request.get_json(silent=True) or {}
+    reason = data.get("reason", "").strip()
+    student_name = data.get("student_name", "Student")
+
+    if not reason:
+        return jsonify({"error": "A reason is required to reopen the complaint."}), 400
+
+    now = datetime.now(timezone.utc)
+    result = complaints_collection.update_one(
+        {"_id": ObjectId(complaint_id)},
+        {
+            "$set": {
+                "status": "Reopened",
+                "reopen_reason": reason,
+                "updated_at": now,
+            },
+            "$push": {"status_history": {
+                "status": "Reopened",
+                "timestamp": now,
+                "student_name": student_name,
+                "reason": reason,
+            }},
+        },
+    )
+    if result.matched_count == 0:
+        return jsonify({"error": "Complaint not found"}), 404
+
+    doc = complaints_collection.find_one({"_id": ObjectId(complaint_id)})
+    if doc:
+        send_reopened_to_admins(serialize_complaint(doc), reason, student_name)
+
+    return jsonify({"success": True, "message": "Complaint reopened."}), 200
 
 
 @complaints_bp.route("/complaints/recurring", methods=["GET"])

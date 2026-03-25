@@ -17,8 +17,9 @@ const ManagerLogin = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      await adminLogin(email, password);
+      const res = await adminLogin(email, password);
       localStorage.setItem(SESSION_KEY, String(Date.now() + SESSION_DURATION));
+      localStorage.setItem('admin_user', JSON.stringify(res.user));
       toast.success('Welcome, Admin!');
       navigate('/admin');
     } catch (err: any) {

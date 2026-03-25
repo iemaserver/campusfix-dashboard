@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 const API = axios.create({
-  baseURL: '/api',
+  //baseURL: '/api',
+  baseURL: 'https://server.uemcseaiml.org/campusfix/api',
   headers: {
     'Content-Type': 'application/json',
   },

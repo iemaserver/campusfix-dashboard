@@ -24,7 +24,7 @@ export const AcceptFeedbackModal = ({
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      await acceptFix(complaint._id, feedback, studentName);
+      await acceptFix(complaint._id, feedback, studentName, complaint.student_email);
       toast.success('Fix accepted! Complaint closed.');
       onDone(complaint._id);
       onClose();
@@ -108,7 +108,7 @@ export const ReopenModal = ({
     }
     setLoading(true);
     try {
-      await reopenComplaint(complaint._id, reason, studentName);
+      await reopenComplaint(complaint._id, reason, studentName, complaint.student_email);
       toast.success('Complaint reopened. Admin has been notified.');
       onDone(complaint._id);
       onClose();

@@ -5,6 +5,11 @@ name: Deploy to Firebase Hosting on merge
       - main
     paths:
       - "frontend/**"
+
+permissions:
+  checks: write
+  contents: read
+
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest

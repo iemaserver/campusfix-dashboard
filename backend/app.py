@@ -37,4 +37,5 @@ def uploaded_file(filename):
 
 
 if __name__ == "__main__":
-    app.run(debug=FLASK_DEBUG, port=8021)
+    port = int(os.environ.get("PORT", 8021))
+    app.run(debug=FLASK_DEBUG, host="0.0.0.0", port=port)

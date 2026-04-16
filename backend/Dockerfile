@@ -32,9 +32,10 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV FLASK_APP=app.py
 ENV FLASK_DEBUG=False
+ENV PORT=8021
 
 # Expose the port
-EXPOSE 8021
+EXPOSE $PORT
 
 # Start the application with gunicorn as requested
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8021", "app:app"]
+CMD gunicorn -w 4 -b 0.0.0.0:$PORT app:app

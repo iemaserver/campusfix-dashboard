@@ -83,14 +83,12 @@ VITE_API_URL=http://localhost:8021/api
 ```
 
 ```bash
-npm run dev        # dev server on port 8080 (proxies /api → localhost:8000)
+npm run dev        # dev server on port 8080
 npm run build      # production build to dist/
 npm run lint       # ESLint
 npm run test       # Vitest (single run)
 npm run test:watch # Vitest (watch mode)
 ```
-
-> **Note:** The Vite dev proxy targets `localhost:8000`, but the backend runs on `8021` by default. Override with `VITE_API_URL` rather than relying on the proxy in local dev.
 
 ## CI/CD
 

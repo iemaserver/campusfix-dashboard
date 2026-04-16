@@ -1,6 +1,5 @@
 {
   "hosting": {
-    "site": "campusfix-dashboard-160426",
     "public": "dist",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [

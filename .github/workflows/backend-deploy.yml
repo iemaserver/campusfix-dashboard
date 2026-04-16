@@ -1,6 +1,11 @@
 name: Deploy Backend to Cloud Run
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/backend-deploy.yml"
   workflow_run:
     workflows: ["Build and Push Backend Docker Image"]
     types:

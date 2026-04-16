@@ -29,7 +29,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Start GitHub Deployment
-        uses: chrnk/deployment-action@v2
+        uses: chrnorm/deployment-action@v2
         id: deployment
         with:
           token: "${{ github.token }}"
@@ -73,7 +73,7 @@ jobs:
 
       - name: Update deployment status (success)
         if: success()
-        uses: chrnk/deployment-status@v2
+        uses: chrnorm/deployment-status@v2
         with:
           token: "${{ github.token }}"
           environment-url: ${{ steps.deploy.outputs.url }}
@@ -82,7 +82,7 @@ jobs:
 
       - name: Update deployment status (failure)
         if: failure()
-        uses: chrnk/deployment-status@v2
+        uses: chrnorm/deployment-status@v2
         with:
           token: "${{ github.token }}"
           state: "failure"

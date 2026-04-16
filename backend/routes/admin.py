@@ -1,13 +1,14 @@
 import os
-from flask import Blueprint, request, jsonify
+
 from dotenv import load_dotenv
+from flask import Blueprint, jsonify, request
 
 load_dotenv()
 
 admin_bp = Blueprint("admin", __name__)
 
 # Admin credentials loaded from .env
-ADMIN_EMAIL    = os.getenv("ADMIN_EMAIL", "admin@gmail.com")
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@gmail.com")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
 
@@ -16,14 +17,16 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 def admin_login_legacy():
     """Legacy endpoint — delegates to same logic."""
     data = request.get_json(silent=True) or {}
-    email    = data.get("email", "")
+    email = data.get("email", "")
     password = data.get("password", "")
     if email == ADMIN_EMAIL and password == ADMIN_PASSWORD:
-        return jsonify({
-            "success": True,
-            "message": "Login successful",
-            "user": {"email": email, "role": "admin", "name": "Admin"},
-        }), 200
+        return jsonify(
+            {
+                "success": True,
+                "message": "Login successful",
+                "user": {"email": email, "role": "admin", "name": "Admin"},
+            }
+        ), 200
     return jsonify({"error": "Invalid credentials"}), 401
 
 

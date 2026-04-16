@@ -1,22 +1,24 @@
 import os
 import uuid
-from flask import Blueprint, request, jsonify, current_app
-from bson import ObjectId
 from datetime import datetime, timezone
+
+from bson import ObjectId
+from flask import Blueprint, current_app, jsonify, request
 from werkzeug.utils import secure_filename
 
+from config import FLASK_DEBUG
 from db import complaints_collection
 from models.complaint_model import create_complaint_doc
-from utils.helpers import serialize_complaint, is_valid_object_id
 from utils.email_queue import (
-    send_complaint_raised_to_student,
-    send_complaint_raised_to_admins,
     send_authority_assigned,
-    send_pending_acceptance,
+    send_complaint_raised_to_admins,
+    send_complaint_raised_to_student,
     send_fix_accepted_to_admins,
+    send_pending_acceptance,
     send_reopened_to_admins,
     send_sms_assignment,
 )
+from utils.helpers import is_valid_object_id, serialize_complaint
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 
@@ -43,7 +45,14 @@ def _is_admin_email(email: str) -> bool:
 
 complaints_bp = Blueprint("complaints", __name__)
 
-ALLOWED_STATUSES = {"Submitted", "Assigned", "In Progress", "Completed", "Pending Acceptance", "Reopened"}
+ALLOWED_STATUSES = {
+    "Submitted",
+    "Assigned",
+    "In Progress",
+    "Completed",
+    "Pending Acceptance",
+    "Reopened",
+}
 
 
 @complaints_bp.route("/complaints", methods=["POST"])
@@ -67,7 +76,9 @@ def create_complaint():
             if file and file.filename and _allowed_file(file.filename):
                 ext = secure_filename(file.filename).rsplit(".", 1)[1].lower()
                 unique_name = f"{uuid.uuid4().hex}.{ext}"
-                file.save(os.path.join(current_app.config["UPLOAD_FOLDER"], unique_name))
+                file.save(
+                    os.path.join(current_app.config["UPLOAD_FOLDER"], unique_name)
+                )
                 photo_url = f"/uploads/{unique_name}"
         data["photo_url"] = photo_url
 
@@ -80,14 +91,18 @@ def create_complaint():
         send_complaint_raised_to_student(c)
         send_complaint_raised_to_admins(c)
 
-        return jsonify({
-            "success": True,
-            "message": "Complaint submitted successfully",
-            "_id": str(result.inserted_id),
-        }), 201
+        return jsonify(
+            {
+                "success": True,
+                "message": "Complaint submitted successfully",
+                "_id": str(result.inserted_id),
+            }
+        ), 201
     except Exception as e:
-        print(f"Error creating complaint: {e}")
-        return jsonify({"error": "Internal server error", "details": str(e)}), 500
+        if FLASK_DEBUG:
+            print(f"Error creating complaint: {e}")
+            return jsonify({"error": "Internal server error", "details": str(e)}), 500
+        return jsonify({"error": "Internal server error. Please try again later."}), 500
 
 
 @complaints_bp.route("/complaints", methods=["GET"])
@@ -135,7 +150,9 @@ def update_status(complaint_id):
         return jsonify({"error": "Forbidden"}), 403
 
     if new_status not in ALLOWED_STATUSES:
-        return jsonify({"error": f"Invalid status. Allowed: {', '.join(ALLOWED_STATUSES)}"}), 400
+        return jsonify(
+            {"error": f"Invalid status. Allowed: {', '.join(ALLOWED_STATUSES)}"}
+        ), 400
 
     now = datetime.now(timezone.utc)
     history_entry = {"status": new_status, "timestamp": now}
@@ -176,6 +193,7 @@ def assign_complaint(complaint_id):
         return jsonify({"error": "Valid authority_id required"}), 400
 
     from db import authorities_collection
+
     authority = authorities_collection.find_one({"_id": ObjectId(authority_id)})
     if not authority:
         return jsonify({"error": "Authority not found"}), 404
@@ -194,13 +212,19 @@ def assign_complaint(complaint_id):
     result = complaints_collection.update_one(
         {"_id": ObjectId(complaint_id)},
         {
-            "$set": {"status": "Assigned", "assigned_to": assigned_to, "updated_at": now},
-            "$push": {"status_history": {
+            "$set": {
                 "status": "Assigned",
-                "timestamp": now,
-                "authority_name": authority.get("name", ""),
-                "admin_name": admin_name,
-            }},
+                "assigned_to": assigned_to,
+                "updated_at": now,
+            },
+            "$push": {
+                "status_history": {
+                    "status": "Assigned",
+                    "timestamp": now,
+                    "authority_name": authority.get("name", ""),
+                    "admin_name": admin_name,
+                }
+            },
         },
     )
     if result.matched_count == 0:
@@ -220,13 +244,15 @@ def assign_complaint(complaint_id):
             assigned_by=admin_name,
         )
 
-    return jsonify({
-        "success": True,
-        "assigned_to": {
-            **{k: v for k, v in assigned_to.items() if k != "assigned_at"},
-            "assigned_at": now.isoformat() + "+00:00",
-        },
-    }), 200
+    return jsonify(
+        {
+            "success": True,
+            "assigned_to": {
+                **{k: v for k, v in assigned_to.items() if k != "assigned_at"},
+                "assigned_at": now.isoformat() + "+00:00",
+            },
+        }
+    ), 200
 
 
 @complaints_bp.route("/complaints/<complaint_id>/accept", methods=["POST"])
@@ -262,11 +288,13 @@ def accept_complaint(complaint_id):
                 "student_feedback": feedback,
                 "updated_at": now,
             },
-            "$push": {"status_history": {
-                "status": "Completed",
-                "timestamp": now,
-                "student_name": student_name,
-            }},
+            "$push": {
+                "status_history": {
+                    "status": "Completed",
+                    "timestamp": now,
+                    "student_name": student_name,
+                }
+            },
         },
     )
     if result.matched_count == 0:
@@ -315,12 +343,14 @@ def reopen_complaint(complaint_id):
                 "reopen_reason": reason,
                 "updated_at": now,
             },
-            "$push": {"status_history": {
-                "status": "Reopened",
-                "timestamp": now,
-                "student_name": student_name,
-                "reason": reason,
-            }},
+            "$push": {
+                "status_history": {
+                    "status": "Reopened",
+                    "timestamp": now,
+                    "student_name": student_name,
+                    "reason": reason,
+                }
+            },
         },
     )
     if result.matched_count == 0:
@@ -337,19 +367,30 @@ def reopen_complaint(complaint_id):
 def recurring_complaints():
     """Return rooms/categories with 3+ complaints (recurring issues)."""
     pipeline = [
-        {"$group": {
-            "_id": {"building": "$building", "room": "$room", "category": "$category"},
-            "count": {"$sum": 1},
-            "latest_status": {"$last": "$status"},
-        }},
+        {
+            "$group": {
+                "_id": {
+                    "building": "$building",
+                    "room": "$room",
+                    "category": "$category",
+                },
+                "count": {"$sum": 1},
+                "latest_status": {"$last": "$status"},
+            }
+        },
         {"$match": {"count": {"$gte": 3}}},
         {"$sort": {"count": -1}},
     ]
     results = list(complaints_collection.aggregate(pipeline))
-    return jsonify([{
-        "building": r["_id"]["building"],
-        "room": r["_id"]["room"],
-        "category": r["_id"]["category"],
-        "count": r["count"],
-        "latest_status": r["latest_status"],
-    } for r in results]), 200
+    return jsonify(
+        [
+            {
+                "building": r["_id"]["building"],
+                "room": r["_id"]["room"],
+                "category": r["_id"]["category"],
+                "count": r["count"],
+                "latest_status": r["latest_status"],
+            }
+            for r in results
+        ]
+    ), 200

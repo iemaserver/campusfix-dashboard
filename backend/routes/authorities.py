@@ -1,6 +1,7 @@
-from flask import Blueprint, request, jsonify
-from bson import ObjectId
 from datetime import datetime, timezone
+
+from bson import ObjectId
+from flask import Blueprint, jsonify, request
 
 from db import authorities_collection
 from utils.helpers import is_valid_object_id

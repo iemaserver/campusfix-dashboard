@@ -12,16 +12,20 @@ Usage:
         send_sms_assignment,
     )
 """
+
 import os
 import queue
 import smtplib
 import threading
-import requests as http_requests
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+import requests as http_requests
+
+from config import FLASK_DEBUG
+
 # ── Textbee config ────────────────────────────────────────────────────────────
-_TEXTBEE_API_KEY  = os.getenv("TEXTBEE_API_KEY", "")
+_TEXTBEE_API_KEY = os.getenv("TEXTBEE_API_KEY", "")
 _TEXTBEE_DEVICE_ID = os.getenv("TEXTBEE_DEVICE_ID", "")
 
 # ── SMTP config (same env vars as auth.py) ────────────────────────────────────
@@ -57,7 +61,8 @@ def _worker() -> None:
             else:
                 _send_email(task["to"], task["subject"], task["html"])
         except Exception as exc:
-            print(f"[Notification] Failed: {exc}")
+            if FLASK_DEBUG:
+                print(f"[Notification] Failed: {exc}")
         finally:
             _q.task_done()
 
@@ -120,7 +125,8 @@ def _send_sms(phone: str, message: str) -> None:
         else:
             print(f"[SMS] Textbee failed for +91{number}: {data}")
     except Exception as exc:
-        print(f"[SMS] Error sending to +91{number}: {exc}")
+        if FLASK_DEBUG:
+            print(f"[SMS] Error sending to +91{number}: {exc}")
 
 
 def send_sms_assignment(
@@ -145,17 +151,28 @@ def send_sms_assignment(
 
 
 # ── HTML template ─────────────────────────────────────────────────────────────
-def _html(heading: str, rows: list[str], highlight: str = "", footer_note: str = "") -> str:
+def _html(
+    heading: str, rows: list[str], highlight: str = "", footer_note: str = ""
+) -> str:
     rows_html = "".join(
-        f'<p style="color:#64748b;font-size:14px;margin:0 0 10px;">{r}</p>' for r in rows
+        f'<p style="color:#64748b;font-size:14px;margin:0 0 10px;">{r}</p>'
+        for r in rows
     )
-    highlight_html = f"""
+    highlight_html = (
+        f"""
         <div style="background:#eff6ff;border:2px dashed #3b82f6;border-radius:12px;
                     padding:18px 24px;text-align:center;margin:20px 0;">
           <span style="font-size:18px;font-weight:800;letter-spacing:2px;color:#1e3a8a;">{highlight}</span>
         </div>
-    """ if highlight else ""
-    footer_html = f'<p style="color:#94a3b8;font-size:12px;text-align:center;margin:16px 0 0;">{footer_note}</p>' if footer_note else ""
+    """
+        if highlight
+        else ""
+    )
+    footer_html = (
+        f'<p style="color:#94a3b8;font-size:12px;text-align:center;margin:16px 0 0;">{footer_note}</p>'
+        if footer_note
+        else ""
+    )
     return f"""
     <html><body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,sans-serif;">
       <table width="100%" cellpadding="0" cellspacing="0">
@@ -192,6 +209,7 @@ def _html(heading: str, rows: list[str], highlight: str = "", footer_note: str =
 
 
 # ── Per-event helpers ─────────────────────────────────────────────────────────
+
 
 def send_complaint_raised_to_student(c: dict) -> None:
     """Email the student confirming their complaint was registered."""

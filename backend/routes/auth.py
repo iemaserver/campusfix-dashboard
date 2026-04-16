@@ -1,13 +1,15 @@
 import os
 import random
 import smtplib
-import requests as http_requests
-from email.mime.text import MIMEText
+from datetime import datetime, timedelta, timezone
 from email.mime.multipart import MIMEMultipart
-from datetime import datetime, timezone, timedelta
-from flask import Blueprint, request, jsonify
-from werkzeug.security import generate_password_hash, check_password_hash
+from email.mime.text import MIMEText
 
+import requests as http_requests
+from flask import Blueprint, jsonify, request
+from werkzeug.security import check_password_hash, generate_password_hash
+
+from config import FLASK_DEBUG
 from db import db
 
 auth_bp = Blueprint("auth", __name__)
@@ -18,6 +20,7 @@ SMTP_PORT = int(os.getenv("OUTLOOK_PORT", 587))
 SMTP_USER = os.getenv("OUTLOOK_EMAIL", "")
 SMTP_PASS = os.getenv("OUTLOOK_PASSWORD", "")
 
+
 # ── Admin accounts from .env (ADMIN_1_, ADMIN_2_, …) ─────────────────────────
 def _load_admins() -> list[dict]:
     admins, i = [], 1
@@ -25,13 +28,16 @@ def _load_admins() -> list[dict]:
         email = os.getenv(f"ADMIN_{i}_EMAIL")
         if not email:
             break
-        admins.append({
-            "email":    email.strip().lower(),
-            "password": os.getenv(f"ADMIN_{i}_PASSWORD", ""),
-            "name":     os.getenv(f"ADMIN_{i}_NAME", "Admin"),
-        })
+        admins.append(
+            {
+                "email": email.strip().lower(),
+                "password": os.getenv(f"ADMIN_{i}_PASSWORD", ""),
+                "name": os.getenv(f"ADMIN_{i}_NAME", "Admin"),
+            }
+        )
         i += 1
     return admins
+
 
 ADMINS = _load_admins()
 
@@ -51,8 +57,8 @@ def _is_allowed_student_email(email: str) -> bool:
 def _send_otp_email(to_email: str, otp: str) -> None:
     msg = MIMEMultipart("alternative")
     msg["Subject"] = "CampusFix – Your OTP Verification Code"
-    msg["From"]    = SMTP_USER
-    msg["To"]      = to_email
+    msg["From"] = SMTP_USER
+    msg["To"] = to_email
 
     html = f"""
     <html><body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,sans-serif;">
@@ -118,27 +124,41 @@ def _send_otp_email(to_email: str, otp: str) -> None:
 
 # ── Routes ───────────────────────────────────────────────────────────────────
 
+
 @auth_bp.route("/auth/send-otp", methods=["POST"])
 def send_otp():
     """Send a 6-digit OTP to the student's email."""
-    data  = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True) or {}
     email = data.get("email", "").strip().lower()
 
     if not email:
         return jsonify({"error": "Email is required"}), 400
 
     if not _is_allowed_student_email(email):
-        return jsonify({"error": "Only @uem.edu.in and @iem.edu.in email addresses are allowed"}), 403
+        return jsonify(
+            {"error": "Only @uem.edu.in and @iem.edu.in email addresses are allowed"}
+        ), 403
 
-    otp        = str(random.randint(100000, 999999))
+    otp = str(random.randint(100000, 999999))
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
     otp_store[email] = {"otp": otp, "expires_at": expires_at}
 
     try:
         _send_otp_email(email, otp)
     except Exception as exc:
-        print(f"[OTP] Failed to send email: {exc}")
-        return jsonify({"error": "Failed to send OTP. Check SMTP configuration.", "details": str(exc)}), 500
+        if FLASK_DEBUG:
+            print(f"[OTP] Failed to send email: {exc}")
+            return jsonify(
+                {
+                    "error": "Failed to send OTP. Check SMTP configuration.",
+                    "details": str(exc),
+                }
+            ), 500
+        return jsonify(
+            {
+                "error": "Failed to send OTP. Please contact administrator if the issue persists."
+            }
+        ), 500
 
     return jsonify({"success": True, "message": f"OTP sent to {email}"}), 200
 
@@ -146,9 +166,9 @@ def send_otp():
 @auth_bp.route("/auth/verify-otp", methods=["POST"])
 def verify_otp():
     """Verify the OTP and log the student in (upsert record)."""
-    data  = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True) or {}
     email = data.get("email", "").strip().lower()
-    otp   = data.get("otp",   "").strip()
+    otp = data.get("otp", "").strip()
 
     if not email or not otp:
         return jsonify({"error": "Email and OTP are required"}), 400
@@ -169,32 +189,38 @@ def verify_otp():
     # Upsert student in DB
     students_collection.update_one(
         {"email": email},
-        {"$set": {"email": email, "last_login": datetime.now(timezone.utc)},
-         "$setOnInsert": {"created_at": datetime.now(timezone.utc)}},
+        {
+            "$set": {"email": email, "last_login": datetime.now(timezone.utc)},
+            "$setOnInsert": {"created_at": datetime.now(timezone.utc)},
+        },
         upsert=True,
     )
 
     name = email.split("@")[0].replace(".", " ").title()
-    return jsonify({
-        "success": True,
-        "message": "Login successful",
-        "user": {"email": email, "role": "student", "name": name},
-    }), 200
+    return jsonify(
+        {
+            "success": True,
+            "message": "Login successful",
+            "user": {"email": email, "role": "student", "name": name},
+        }
+    ), 200
 
 
 @auth_bp.route("/auth/student-register", methods=["POST"])
 def student_register():
     """Register a new student with email/password."""
-    data     = request.get_json(silent=True) or {}
-    name     = data.get("name", "").strip()
-    email    = data.get("email", "").strip().lower()
+    data = request.get_json(silent=True) or {}
+    name = data.get("name", "").strip()
+    email = data.get("email", "").strip().lower()
     password = data.get("password", "")
 
     if not name or not email or not password:
         return jsonify({"error": "Name, email, and password are required"}), 400
 
     if not _is_allowed_student_email(email):
-        return jsonify({"error": "Only @uem.edu.in and @iem.edu.in email addresses are allowed"}), 403
+        return jsonify(
+            {"error": "Only @uem.edu.in and @iem.edu.in email addresses are allowed"}
+        ), 403
 
     if len(password) < 6:
         return jsonify({"error": "Password must be at least 6 characters"}), 400
@@ -210,10 +236,10 @@ def student_register():
         {"email": email},
         {
             "$set": {
-                "email":         email,
-                "name":          name,
+                "email": email,
+                "name": name,
                 "password_hash": password_hash,
-                "provider":      "email",
+                "provider": "email",
             },
             "$setOnInsert": {"created_at": datetime.now(timezone.utc)},
         },
@@ -226,15 +252,17 @@ def student_register():
 @auth_bp.route("/auth/student-login", methods=["POST"])
 def student_login():
     """Login student with email/password."""
-    data     = request.get_json(silent=True) or {}
-    email    = data.get("email", "").strip().lower()
+    data = request.get_json(silent=True) or {}
+    email = data.get("email", "").strip().lower()
     password = data.get("password", "")
 
     if not email or not password:
         return jsonify({"error": "Email and password are required"}), 400
 
     if not _is_allowed_student_email(email):
-        return jsonify({"error": "Only @uem.edu.in and @iem.edu.in email addresses are allowed"}), 403
+        return jsonify(
+            {"error": "Only @uem.edu.in and @iem.edu.in email addresses are allowed"}
+        ), 403
 
     student = students_collection.find_one({"email": email})
     if not student or not student.get("password_hash"):
@@ -249,21 +277,23 @@ def student_login():
         {"$set": {"last_login": datetime.now(timezone.utc)}},
     )
 
-    return jsonify({
-        "success": True,
-        "message": "Login successful",
-        "user": {
-            "email": email,
-            "role": "student",
-            "name": student.get("name", email.split("@")[0].title()),
-        },
-    }), 200
+    return jsonify(
+        {
+            "success": True,
+            "message": "Login successful",
+            "user": {
+                "email": email,
+                "role": "student",
+                "name": student.get("name", email.split("@")[0].title()),
+            },
+        }
+    ), 200
 
 
 @auth_bp.route("/auth/microsoft", methods=["POST"])
 def microsoft_login():
     """Verify Microsoft access token, enforce uem.edu.in domain."""
-    data         = request.get_json(silent=True) or {}
+    data = request.get_json(silent=True) or {}
     access_token = data.get("access_token", "")
 
     if not access_token:
@@ -279,57 +309,62 @@ def microsoft_login():
     if resp.status_code != 200:
         return jsonify({"error": "Invalid or expired Microsoft token"}), 401
 
-    info  = resp.json()
+    info = resp.json()
     email = (info.get("mail") or info.get("userPrincipalName") or "").lower().strip()
-    name  = info.get("displayName") or email.split("@")[0].title()
+    name = info.get("displayName") or email.split("@")[0].title()
 
     if not email:
-        return jsonify({"error": "Could not retrieve email from Microsoft account"}), 400
+        return jsonify(
+            {"error": "Could not retrieve email from Microsoft account"}
+        ), 400
 
     # ── Enforce allowed student domains ──────────────────────────────────
     if not _is_allowed_student_email(email):
-        return jsonify({
-            "error": "Access restricted to students only. Please use your @uem.edu.in or @iem.edu.in Outlook account."
-        }), 403
+        return jsonify(
+            {
+                "error": "Access restricted to students only. Please use your @uem.edu.in or @iem.edu.in Outlook account."
+            }
+        ), 403
 
     # Upsert student in DB
     students_collection.update_one(
         {"email": email},
         {
             "$set": {
-                "email":      email,
-                "name":       name,
+                "email": email,
+                "name": name,
                 "last_login": datetime.now(timezone.utc),
-                "provider":   "microsoft",
+                "provider": "microsoft",
             },
             "$setOnInsert": {"created_at": datetime.now(timezone.utc)},
         },
         upsert=True,
     )
 
-    return jsonify({
-        "success": True,
-        "message": "Login successful",
-        "user": {"email": email, "role": "student", "name": name},
-    }), 200
-
-
-
+    return jsonify(
+        {
+            "success": True,
+            "message": "Login successful",
+            "user": {"email": email, "role": "student", "name": name},
+        }
+    ), 200
 
 
 @auth_bp.route("/auth/admin-login", methods=["POST"])
 def admin_login():
     """Validate admin credentials against all accounts defined in .env."""
-    data     = request.get_json(silent=True) or {}
-    email    = data.get("email",    "").strip().lower()
+    data = request.get_json(silent=True) or {}
+    email = data.get("email", "").strip().lower()
     password = data.get("password", "")
 
     for admin in ADMINS:
         if email == admin["email"] and password == admin["password"]:
-            return jsonify({
-                "success": True,
-                "message": "Login successful",
-                "user": {"email": email, "role": "admin", "name": admin["name"]},
-            }), 200
+            return jsonify(
+                {
+                    "success": True,
+                    "message": "Login successful",
+                    "user": {"email": email, "role": "admin", "name": admin["name"]},
+                }
+            ), 200
 
     return jsonify({"error": "Invalid admin credentials"}), 401

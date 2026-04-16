@@ -1,0 +1,54 @@
+name: Deploy Backend to Cloud Run
+
+on:
+  workflow_run:
+    workflows: ["Build and Push Backend Docker Image"]
+    types:
+      - completed
+    branches:
+      - main
+
+env:
+  PROJECT_ID: hosting-vms
+  REGION: us-central1
+  SERVICE_NAME: campusfix-backend
+  REGISTRY_IMAGE: ghcr.io/${{ github.repository }}-backend:latest
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Lowercase image name
+        run: |
+          IMAGE_NAME="ghcr.io/${{ github.repository }}-backend"
+          echo "IMAGE_NAME=${IMAGE_NAME,,}:latest" >> $GITHUB_ENV
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          region: ${{ env.REGION }}
+          image: ${{ env.IMAGE_NAME }}
+          flags: --port=8021 --allow-unauthenticated --project=${{ env.PROJECT_ID }}
+
+      - name: Show Output
+        run: echo ${{ steps.deploy.outputs.url }}

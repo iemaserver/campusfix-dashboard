@@ -49,6 +49,18 @@ jobs:
           region: ${{ env.REGION }}
           image: ${{ env.IMAGE_NAME }}
           flags: --port=8021 --allow-unauthenticated --project=${{ env.PROJECT_ID }}
+          env_vars: |
+            MONGO_URI=${{ secrets.MONGO_URI }}
+            DB_NAME=${{ secrets.DB_NAME }}
+            FLASK_DEBUG=${{ secrets.FLASK_DEBUG }}
+            OUTLOOK_EMAIL=${{ secrets.OUTLOOK_EMAIL }}
+            OUTLOOK_PASSWORD=${{ secrets.OUTLOOK_PASSWORD }}
+            OUTLOOK_HOST=${{ secrets.OUTLOOK_HOST }}
+            OUTLOOK_PORT=${{ secrets.OUTLOOK_PORT }}
+            ADMIN_1_EMAIL=${{ secrets.ADMIN_1_EMAIL }}
+            ADMIN_1_PASSWORD=${{ secrets.ADMIN_1_PASSWORD }}
+            ADMIN_1_NAME=${{ secrets.ADMIN_1_NAME }}
+            MICROSOFT_CLIENT_ID=${{ secrets.MICROSOFT_CLIENT_ID }}
 
       - name: Show Output
         run: echo ${{ steps.deploy.outputs.url }}

@@ -6,9 +6,14 @@ def _normalize_photo(url: str | None) -> str | None:
     if not url:
         return None
     # Strip any hardcoded localhost origin so the Vite proxy can serve it
-    for prefix in ("http://localhost:5000", "http://localhost:8000", "http://127.0.0.1:5000", "http://127.0.0.1:8000"):
+    for prefix in (
+        "http://localhost:5000",
+        "http://localhost:8000",
+        "http://127.0.0.1:5000",
+        "http://127.0.0.1:8000",
+    ):
         if url.startswith(prefix):
-            return url[len(prefix):]
+            return url[len(prefix) :]
     return url
 
 
@@ -62,7 +67,9 @@ def serialize_complaint(doc):
     ]
 
     # Fallback ticket number for old records that predate this field
-    ticket_number = doc.get("ticket_number") or f"CF-LEGACY-{str(doc['_id'])[-5:].upper()}"
+    ticket_number = (
+        doc.get("ticket_number") or f"CF-LEGACY-{str(doc['_id'])[-5:].upper()}"
+    )
 
     return {
         "_id": str(doc["_id"]),

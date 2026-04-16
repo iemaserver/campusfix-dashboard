@@ -4,7 +4,7 @@ from flask import Flask, send_from_directory
 from flask_cors import CORS
 
 import utils.email_queue  # noqa: F401 — starts background email worker thread
-from config import FLASK_DEBUG
+from config import FLASK_DEBUG, PORT
 from routes.admin import admin_bp
 from routes.auth import auth_bp
 from routes.authorities import authorities_bp
@@ -37,5 +37,4 @@ def uploaded_file(filename):
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8021))
-    app.run(debug=FLASK_DEBUG, host="0.0.0.0", port=port)
+    app.run(debug=FLASK_DEBUG, host="0.0.0.0", port=PORT)

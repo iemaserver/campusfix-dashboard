@@ -1,13 +1,15 @@
 import os
+
 from flask import Flask, send_from_directory
 from flask_cors import CORS
 
 import utils.email_queue  # noqa: F401 — starts background email worker thread
-from routes.complaints import complaints_bp
+from config import FLASK_DEBUG
 from routes.admin import admin_bp
-from routes.dashboard import dashboard_bp
 from routes.auth import auth_bp
 from routes.authorities import authorities_bp
+from routes.complaints import complaints_bp
+from routes.dashboard import dashboard_bp
 
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -35,4 +37,4 @@ def uploaded_file(filename):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=8021)
+    app.run(debug=FLASK_DEBUG, port=8021)

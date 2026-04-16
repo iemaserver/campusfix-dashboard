@@ -22,10 +22,19 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      deployments: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Start GitHub Deployment
+        uses: chrnk/deployment-action@v2
+        id: deployment
+        with:
+          token: "${{ github.token }}"
+          environment: production
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Authenticate to Google Cloud
         id: auth
@@ -61,6 +70,23 @@ jobs:
             ADMIN_1_PASSWORD=${{ secrets.ADMIN_1_PASSWORD }}
             ADMIN_1_NAME=${{ secrets.ADMIN_1_NAME }}
             MICROSOFT_CLIENT_ID=${{ secrets.MICROSOFT_CLIENT_ID }}
+
+      - name: Update deployment status (success)
+        if: success()
+        uses: chrnk/deployment-status@v2
+        with:
+          token: "${{ github.token }}"
+          environment-url: ${{ steps.deploy.outputs.url }}
+          state: "success"
+          deployment-id: ${{ steps.deployment.outputs.deployment_id }}
+
+      - name: Update deployment status (failure)
+        if: failure()
+        uses: chrnk/deployment-status@v2
+        with:
+          token: "${{ github.token }}"
+          state: "failure"
+          deployment-id: ${{ steps.deployment.outputs.deployment_id }}
 
       - name: Show Output
         run: echo ${{ steps.deploy.outputs.url }}

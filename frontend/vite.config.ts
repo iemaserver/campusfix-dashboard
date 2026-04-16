@@ -12,11 +12,11 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
     proxy: {
-      '/campusfix/api': {
+      '/api': {
         target: 'http://localhost:8021',
         changeOrigin: true,
       },
-      '/campusfix/uploads': {
+      '/uploads': {
         target: 'http://localhost:8021',
         changeOrigin: true,
       },

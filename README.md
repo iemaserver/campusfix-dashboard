@@ -10,7 +10,7 @@ campusfix-dashboard/
 └── frontend/     # React + TypeScript + Vite SPA
 ```
 
-**Backend** (Python/Flask) exposes a REST API under `/campusfix/api/` and serves uploaded files at `/campusfix/uploads/<filename>`. It uses MongoDB for persistence and sends transactional emails via SMTP (Outlook/Office365). Deployed as a Docker container on **Google Cloud Run**.
+**Backend** (Python/Flask) exposes a REST API under `/api/` and serves uploaded files at `/uploads/<filename>`. It uses MongoDB for persistence and sends transactional emails via SMTP (Outlook/Office365). Deployed as a Docker container on **Google Cloud Run**.
 
 **Frontend** (React/TypeScript/Vite) is a SPA with role-based routing for students, admins, and clerks. Deployed to **Firebase Hosting**; all routes rewrite to `index.html`.
 
@@ -79,7 +79,7 @@ npm install
 Set `VITE_API_URL` in a `.env` file (defaults to `http://localhost:8021/api` if unset):
 
 ```env
-VITE_API_URL=http://localhost:8021/campusfix/api
+VITE_API_URL=http://localhost:8021/api
 ```
 
 ```bash

@@ -1,36 +1,69 @@
-# Repository Guidelines
+# AGENTS
 
-## Project Structure & Module Organization
-This repository is split into two apps:
+Lightweight onboarding for coding agents in this repository.
 
-- `backend/`: Flask API, MongoDB access, and email utilities. Route modules live in `backend/routes/`, data logic in `backend/models/`, shared helpers in `backend/utils/`, and runtime uploads in `backend/uploads/`.
-- `frontend/`: React + TypeScript + Vite SPA. Pages live in `frontend/src/pages/`, reusable UI in `frontend/src/components/` and `frontend/src/components/ui/`, layouts in `frontend/src/layout/`, hooks in `frontend/src/hooks/`, and API helpers in `frontend/src/services/`.
-- `.github/workflows/`: CI/CD for backend Docker builds, Cloud Run deploys, and Firebase Hosting.
+## Source Of Truth
 
-## Build, Test, and Development Commands
-Use app-local commands from the relevant directory.
+- Start with [README.md](README.md) for architecture, environment variables, and CI/CD.
+- Use [CLAUDE.md](CLAUDE.md) for deeper implementation details and auth/session behavior.
+- Keep this file short; link to docs instead of duplicating long guidance.
+
+## Quick Start
+
+1. Backend setup and run:
 
 ```bash
-cd backend && uv sync
-cd backend && uv run python app.py
-cd backend && docker compose up --build
-cd frontend && npm install
-cd frontend && npm run dev
-cd frontend && npm run build
-cd frontend && npm run lint
-cd frontend && npm run test
+cd backend
+uv sync
+uv run python app.py
 ```
 
-`uv run python app.py` starts the Flask API on port `8021` by default. `npm run dev` starts the frontend, `npm run build` creates the production bundle, `npm run lint` runs ESLint, and `npm run test` runs Vitest once.
+1. Frontend setup and run:
 
-## Coding Style & Naming Conventions
-Follow existing project style instead of reformatting unrelated files. Python uses 4-space indentation, snake_case modules, and small route-focused files. Frontend code uses TypeScript, PascalCase for components/pages (`StudentDashboard.tsx`), camelCase for hooks/services (`use-toast.ts`, `api.ts`), and utility-first Tailwind classes. Use the configured ESLint rules in `frontend/eslint.config.js`; there is no separate Prettier setup in this repo.
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-## Testing Guidelines
-Frontend tests use Vitest with Testing Library and setup from `frontend/src/test/setup.ts`. Place tests next to the feature or under `frontend/src/test/` using `*.test.ts` or `*.test.tsx`. Add or update tests for UI behavior and API-facing logic when changing the frontend. The backend currently has no committed automated test suite, so document manual verification steps in your PR when backend behavior changes.
+1. Validation commands:
 
-## Commit & Pull Request Guidelines
-Git history uses Conventional Commits such as `feat(backend): ...`, `chore(frontend): ...`, and `docs: ...`. Keep messages lowercase and scoped when helpful. PRs should include a short summary, linked issue or task, affected areas (`backend`, `frontend`, or both), and screenshots for visible frontend changes. Call out any new environment variables, migrations, or deployment impact.
+```bash
+cd frontend && npm run lint
+cd frontend && npm run test
+cd frontend && npm run build
+```
 
-## Security & Configuration Tips
-Do not commit `.env` files, credentials, MongoDB URIs, or generated folders such as `frontend/dist/`, `frontend/node_modules/`, and `backend/.venv/`. Prefer `VITE_API_URL` for local frontend API configuration instead of relying on proxy defaults.
+## High-Value Facts For Agents
+
+- Monorepo with two apps: Flask backend in [backend](backend), React + Vite frontend in [frontend](frontend).
+- Backend API is under /api/\* and defaults to port 8021.
+- Frontend dev server runs on port 8080 and proxies /api/\* and /uploads/\* to backend.
+- Backend uses direct PyMongo (no ORM) and stores runtime uploads in [backend/uploads](backend/uploads).
+- Frontend auth state is stored in localStorage (student and admin sessions), no JWT.
+
+## Common Pitfalls
+
+- Do not break API prefixing (/api/*) when adding backend routes.
+- Keep upload serving behavior compatible with existing /uploads paths.
+- Backend has no committed automated tests; include manual verification notes for backend changes.
+- Do not commit secrets or generated artifacts (.env, node_modules, dist, .venv, uploads content).
+
+## Code Conventions
+
+- Python: 4-space indentation, snake_case modules, route-focused files in [backend/routes](backend/routes).
+- Frontend: PascalCase components/pages, camelCase hooks/services, Tailwind utility classes.
+- Follow existing style in touched files; avoid unrelated reformatting.
+
+## Where To Look First
+
+- Routing and guards: [frontend/src/App.tsx](frontend/src/App.tsx)
+- Frontend API wrappers: [frontend/src/services/api.ts](frontend/src/services/api.ts)
+- Backend entry and blueprint registration: [backend/app.py](backend/app.py)
+- Complaint workflow/status handling: [backend/routes/complaints.py](backend/routes/complaints.py)
+
+## Change Expectations
+
+- Keep changes scoped and minimal.
+- Update or add frontend tests when frontend behavior changes.
+- Use conventional commit style when requested: feat(scope): ..., fix(scope): ..., docs: ...

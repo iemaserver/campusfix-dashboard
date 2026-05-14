@@ -13,11 +13,11 @@ env:
   PROJECT_ID: hosting-vms
   REGION: us-central1
   SERVICE_NAME: campusfix-backend
-  REGISTRY_IMAGE: ghcr.io/${{ github.repository }}-backend:latest
+  GAR_IMAGE: us-central1-docker.pkg.dev/hosting-vms/campusfix/campusfix-dashboard-backend:latest
 
 jobs:
   deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
 
     permissions:
@@ -46,18 +46,13 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v3
 
-      - name: Lowercase image name
-        run: |
-          IMAGE_NAME="ghcr.io/${{ github.repository }}-backend"
-          echo "IMAGE_NAME=${IMAGE_NAME,,}:latest" >> $GITHUB_ENV
-
       - name: Deploy to Cloud Run
         id: deploy
         uses: google-github-actions/deploy-cloudrun@v3
         with:
           service: ${{ env.SERVICE_NAME }}
           region: ${{ env.REGION }}
-          image: ${{ env.IMAGE_NAME }}
+          image: ${{ env.GAR_IMAGE }}
           flags: --port=8021 --allow-unauthenticated --project=${{ env.PROJECT_ID }}
           env_vars: |
             MONGO_URI=${{ secrets.MONGO_URI }}
@@ -90,4 +85,6 @@ jobs:
           deployment-id: ${{ steps.deployment.outputs.deployment_id }}
 
       - name: Show Output
-        run: echo ${{ steps.deploy.outputs.url }}
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        run: echo "$DEPLOY_URL"

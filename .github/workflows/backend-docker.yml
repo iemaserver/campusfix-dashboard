@@ -10,8 +10,11 @@ on:
       - ".github/workflows/backend-deploy.yml"
 
 env:
-  REGISTRY: ghcr.io
-  # IMAGE_NAME will be lowercased in a step below
+  GHCR_REGISTRY: ghcr.io
+  GAR_REGISTRY: us-central1-docker.pkg.dev
+  GAR_REPOSITORY: campusfix
+  GCP_PROJECT_ID: hosting-vms
+  GCP_REGION: us-central1
   IMAGE_NAME: ${{ github.repository }}-backend
 
 jobs:
@@ -25,12 +28,35 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Log in to the Container registry
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ env.GHCR_REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GAR_REGISTRY }} --quiet
+
+      - name: Ensure Artifact Registry repository exists
+        run: |
+          gcloud artifacts repositories describe "$GAR_REPOSITORY" \
+            --location="$GCP_REGION" \
+            --project="$GCP_PROJECT_ID" 2>/dev/null \
+          || gcloud artifacts repositories create "$GAR_REPOSITORY" \
+            --repository-format=docker \
+            --location="$GCP_REGION" \
+            --project="$GCP_PROJECT_ID" \
+            --description="CampusFix Docker images"
+        env:
+          GAR_REPOSITORY: ${{ env.GAR_REPOSITORY }}
+          GCP_REGION: ${{ env.GCP_REGION }}
+          GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}
 
       - name: Lowercase IMAGE_NAME
         run: |
@@ -40,7 +66,9 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: |
+            ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}
+            ${{ env.GAR_REGISTRY }}/${{ env.GCP_PROJECT_ID }}/${{ env.GAR_REPOSITORY }}/campusfix-dashboard-backend
           tags: |
             type=sha,format=long
             type=ref,event=branch

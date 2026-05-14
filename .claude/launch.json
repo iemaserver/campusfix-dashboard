@@ -1,0 +1,20 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Frontend (Vite)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "frontend",
+      "port": 8080
+    },
+    {
+      "name": "Backend (Flask)",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "python", "app.py"],
+      "cwd": "backend",
+      "port": 8021,
+      "autoPort": false
+    }
+  ]
+}

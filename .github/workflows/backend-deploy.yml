@@ -10,10 +10,10 @@ on:
   workflow_dispatch:
 
 env:
-  PROJECT_ID: hosting-vms
+  PROJECT_ID: campusfix-dashboard-9999
   REGION: us-central1
   SERVICE_NAME: campusfix-backend
-  GAR_IMAGE: us-central1-docker.pkg.dev/hosting-vms/campusfix/campusfix-dashboard-backend:latest
+  GAR_IMAGE: us-central1-docker.pkg.dev/campusfix-dashboard-9999/campusfix/campusfix-dashboard-backend:latest
 
 jobs:
   deploy:

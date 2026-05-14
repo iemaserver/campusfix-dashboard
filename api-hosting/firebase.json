@@ -1,0 +1,16 @@
+{
+  "hosting": {
+    "site": "campusfix-api",
+    "public": "public",
+    "ignore": ["firebase.json"],
+    "rewrites": [
+      {
+        "source": "**",
+        "run": {
+          "serviceId": "campusfix-backend",
+          "region": "us-central1"
+        }
+      }
+    ]
+  }
+}

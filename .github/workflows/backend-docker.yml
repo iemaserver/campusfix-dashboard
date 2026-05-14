@@ -8,12 +8,13 @@ on:
       - "backend/**"
       - ".github/workflows/backend-docker.yml"
       - ".github/workflows/backend-deploy.yml"
+  workflow_dispatch:
 
 env:
   GHCR_REGISTRY: ghcr.io
   GAR_REGISTRY: us-central1-docker.pkg.dev
   GAR_REPOSITORY: campusfix
-  GCP_PROJECT_ID: hosting-vms
+  GCP_PROJECT_ID: campusfix-dashboard-9999
   GCP_REGION: us-central1
   IMAGE_NAME: ${{ github.repository }}-backend
 

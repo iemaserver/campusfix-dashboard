@@ -113,4 +113,6 @@ uploads/
 # Ignore vscode AI rules
 .github/instructions/codacy.instructions.md
 
+# Claude
 .claude/settings.local.json
+.claude/scheduled_tasks.lock

@@ -118,3 +118,5 @@ uploads/
 .claude/scheduled_tasks.lock
 
 frontend/.firebase/
+
+api-hosting/.firebase/

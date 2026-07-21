@@ -59,12 +59,21 @@ nothing else to configure. Leave this running.
 **Find the computer's LAN IP** — the app needs it (yours will differ):
 
 ```bash
-ipconfig getifaddr en0            # macOS (Wi-Fi)
-hostname -I | awk '{print $1}'    # Linux
-ipconfig                          # Windows → "IPv4 Address" under your Wi-Fi adapter
+# macOS (Wi-Fi; try en1 if en0 is blank)
+ipconfig getifaddr en0
+
+# Linux
+hostname -I | awk '{print $1}'
+
+# Windows — Command Prompt (shows the "IPv4 Address" line)
+ipconfig | findstr /i "IPv4"
+
+# Windows — PowerShell (the active adapter's IP directly)
+(Get-NetIPConfiguration | Where-Object IPv4DefaultGateway).IPv4Address.IPAddress
 ```
 
-Example result: `192.168.1.42`.
+Example result: `192.168.1.42`. On Windows the CMD command prints a full line like
+`IPv4 Address. . . . . . . . . . . : 192.168.1.42` — use the number at the end.
 
 ### Terminal 2 — run the app on the phone
 

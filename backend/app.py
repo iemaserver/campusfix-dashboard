@@ -1,4 +1,8 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from flask import Flask, send_from_directory
 from flask_cors import CORS
 
@@ -35,4 +39,5 @@ def uploaded_file(filename):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=8021)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=True, port=port)

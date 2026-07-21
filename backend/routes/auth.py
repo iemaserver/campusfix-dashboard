@@ -49,9 +49,17 @@ def _is_allowed_student_email(email: str) -> bool:
 
 
 def _send_otp_email(to_email: str, otp: str) -> None:
+    smtp_host = os.getenv("OUTLOOK_HOST", "smtp.office365.com")
+    smtp_port = int(os.getenv("OUTLOOK_PORT", 587))
+    smtp_user = os.getenv("OUTLOOK_EMAIL", "")
+    smtp_pass = os.getenv("OUTLOOK_PASSWORD", "")
+
+    if not smtp_user or not smtp_pass:
+        raise ValueError("OUTLOOK_EMAIL or OUTLOOK_PASSWORD is missing in backend .env file")
+
     msg = MIMEMultipart("alternative")
     msg["Subject"] = "CampusFix – Your OTP Verification Code"
-    msg["From"]    = SMTP_USER
+    msg["From"]    = smtp_user
     msg["To"]      = to_email
 
     html = f"""
@@ -109,11 +117,11 @@ def _send_otp_email(to_email: str, otp: str) -> None:
     """
     msg.attach(MIMEText(html, "html"))
 
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+    with smtplib.SMTP(smtp_host, smtp_port) as server:
         server.ehlo()
         server.starttls()
-        server.login(SMTP_USER, SMTP_PASS)
-        server.sendmail(SMTP_USER, to_email, msg.as_string())
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_user, to_email, msg.as_string())
 
 
 # ── Routes ───────────────────────────────────────────────────────────────────
@@ -136,9 +144,15 @@ def send_otp():
 
     try:
         _send_otp_email(email, otp)
+        print(f"[OTP] Email sent successfully to {email}")
     except Exception as exc:
-        print(f"[OTP] Failed to send email: {exc}")
-        return jsonify({"error": "Failed to send OTP. Check SMTP configuration.", "details": str(exc)}), 500
+        print(f"[OTP] Failed to send email via SMTP ({exc})")
+        print(f"[OTP] SMTP config: host={os.getenv('OUTLOOK_HOST')}, user={os.getenv('OUTLOOK_EMAIL')}")
+        print(f"[OTP DEV FALLBACK] Code for {email} is: {otp}")
+        return jsonify({
+            "error": f"Failed to send OTP. Check SMTP configuration.",
+            "details": str(exc),
+        }), 500
 
     return jsonify({"success": True, "message": f"OTP sent to {email}"}), 200
 

@@ -62,13 +62,23 @@ def _worker() -> None:
             _q.task_done()
 
 
-_thread = threading.Thread(target=_worker, daemon=True, name="email-worker")
-_thread.start()
+_thread: threading.Thread | None = None
+
+
+def _ensure_worker_started() -> None:
+    global _thread
+    if _thread is None or not _thread.is_alive():
+        _thread = threading.Thread(target=_worker, daemon=True, name="email-worker")
+        _thread.start()
 
 
 def enqueue_email(to: str, subject: str, html: str) -> None:
     """Non-blocking — push email job onto the queue."""
-    if not _USER or not _PASS:
+    _ensure_worker_started()
+    user = os.getenv("OUTLOOK_EMAIL", "")
+    user = os.getenv("OUTLOOK_EMAIL", "")
+    password = os.getenv("OUTLOOK_PASSWORD", "")
+    if not user or not password:
         print("[EmailQueue] SMTP not configured — skipping email.")
         return
     _q.put({"to": to, "subject": subject, "html": html})
@@ -76,16 +86,20 @@ def enqueue_email(to: str, subject: str, html: str) -> None:
 
 # ── Low-level send ────────────────────────────────────────────────────────────
 def _send_email(to: str, subject: str, html: str) -> None:
+    host = os.getenv("OUTLOOK_HOST", "smtp.office365.com")
+    port = int(os.getenv("OUTLOOK_PORT", 587))
+    user = os.getenv("OUTLOOK_EMAIL", "")
+    password = os.getenv("OUTLOOK_PASSWORD", "")
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = _USER
+    msg["From"] = user
     msg["To"] = to
     msg.attach(MIMEText(html, "html"))
-    with smtplib.SMTP(_HOST, _PORT) as server:
+    with smtplib.SMTP(host, port) as server:
         server.ehlo()
         server.starttls()
-        server.login(_USER, _PASS)
-        server.sendmail(_USER, to, msg.as_string())
+        server.login(user, password)
+        server.sendmail(user, to, msg.as_string())
 
 
 # ── SMS ──────────────────────────────────────────────────────────────────────
@@ -134,6 +148,7 @@ def send_sms_assignment(
     """Queue an SMS to the authority when they are assigned a complaint."""
     if not authority_phone:
         return
+    _ensure_worker_started()
     location_str = f"{location.get('building', '')}, Room {location.get('room', '')}"
     message = (
         f"CampusFix Alert: Hi {authority_name}, you have been assigned a new task.\n"

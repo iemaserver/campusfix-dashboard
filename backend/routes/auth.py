@@ -7,7 +7,10 @@ from datetime import datetime, timezone, timedelta
 from flask import Blueprint, request, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from db import db
+from db import db, otps_collection
+from extensions import limiter
+from flask_limiter.util import get_remote_address
+from utils.auth import generate_token
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -37,14 +40,24 @@ ADMINS = _load_admins()
 # ── Collections ──────────────────────────────────────────────────────────────
 students_collection = db["students"]
 
-# ── In-memory OTP store  {email: {otp, expires_at}} ─────────────────────────
-otp_store: dict = {}
+# Wrong-OTP attempts allowed before the code is invalidated (anti-brute-force).
+MAX_OTP_ATTEMPTS = 5
+
+# Minimum wait between OTP (re)sends for the same email, in seconds.
+OTP_RESEND_COOLDOWN_SECONDS = 30
 
 
 def _is_allowed_student_email(email: str) -> bool:
     """Allow only official student domains."""
     normalized = email.strip().lower()
     return normalized.endswith("@uem.edu.in") or normalized.endswith("@iem.edu.in")
+
+
+def _otp_email_key() -> str:
+    """Bucket OTP rate limits per email so students on a shared campus IP don't
+    consume each other's budget. Falls back to IP when no email is supplied."""
+    data = request.get_json(silent=True) or {}
+    return (data.get("email") or "").strip().lower() or get_remote_address()
 
 
 def _send_otp_email(to_email: str, otp: str) -> None:
@@ -126,6 +139,8 @@ def _send_otp_email(to_email: str, otp: str) -> None:
 # ── Routes ───────────────────────────────────────────────────────────────────
 
 @auth_bp.route("/auth/send-otp", methods=["POST"])
+@limiter.limit("5 per 10 minutes", key_func=_otp_email_key)  # per email (primary)
+@limiter.limit("40 per 10 minutes")                          # per IP (abuse backstop)
 def send_otp():
     """Send a 6-digit OTP to the student's email."""
     data  = request.get_json(silent=True) or {}
@@ -137,9 +152,35 @@ def send_otp():
     if not _is_allowed_student_email(email):
         return jsonify({"error": "Only @uem.edu.in and @iem.edu.in email addresses are allowed"}), 403
 
+    # Enforce the resend cooldown server-side (survives restarts and multiple workers).
+    existing = otps_collection.find_one({"email": email})
+    if existing and existing.get("sent_at"):
+        sent_at = existing["sent_at"]
+        if sent_at.tzinfo is None:
+            sent_at = sent_at.replace(tzinfo=timezone.utc)
+        elapsed = (datetime.now(timezone.utc) - sent_at).total_seconds()
+        if elapsed < OTP_RESEND_COOLDOWN_SECONDS:
+            retry_after = max(1, int(round(OTP_RESEND_COOLDOWN_SECONDS - elapsed)))
+            return jsonify({
+                "error": f"Please wait {retry_after}s before requesting another OTP.",
+                "retry_after": retry_after,
+            }), 429
+
+    now        = datetime.now(timezone.utc)
     otp        = str(random.randint(100000, 999999))
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
-    otp_store[email] = {"otp": otp, "expires_at": expires_at}
+    expires_at = now + timedelta(minutes=10)
+    # Store only a hash of the OTP; reset the attempt counter on each (re)send.
+    otps_collection.update_one(
+        {"email": email},
+        {"$set": {
+            "email":      email,
+            "otp_hash":   generate_password_hash(otp),
+            "expires_at": expires_at,
+            "sent_at":    now,
+            "attempts":   0,
+        }},
+        upsert=True,
+    )
 
     try:
         _send_otp_email(email, otp)
@@ -148,15 +189,18 @@ def send_otp():
         print(f"[OTP] Failed to send email via SMTP ({exc})")
         print(f"[OTP] SMTP config: host={os.getenv('OUTLOOK_HOST')}, user={os.getenv('OUTLOOK_EMAIL')}")
         print(f"[OTP DEV FALLBACK] Code for {email} is: {otp}")
-        return jsonify({
-            "error": f"Failed to send OTP. Check SMTP configuration.",
-            "details": str(exc),
-        }), 500
+        return jsonify({"error": "Failed to send OTP. Please try again later."}), 500
 
-    return jsonify({"success": True, "message": f"OTP sent to {email}"}), 200
+    return jsonify({
+        "success": True,
+        "message": f"OTP sent to {email}",
+        "resend_after": OTP_RESEND_COOLDOWN_SECONDS,
+    }), 200
 
 
 @auth_bp.route("/auth/verify-otp", methods=["POST"])
+@limiter.limit("10 per 10 minutes", key_func=_otp_email_key)  # per email (primary)
+@limiter.limit("60 per 10 minutes")                           # per IP (abuse backstop)
 def verify_otp():
     """Verify the OTP and log the student in (upsert record)."""
     data  = request.get_json(silent=True) or {}
@@ -166,18 +210,33 @@ def verify_otp():
     if not email or not otp:
         return jsonify({"error": "Email and OTP are required"}), 400
 
-    stored = otp_store.get(email)
-    if not stored:
+    # Belt-and-braces: a token must never be mintable for a non-campus address,
+    # even though an OTP can only exist for one (send-otp already gates the domain).
+    if not _is_allowed_student_email(email):
+        return jsonify({"error": "Only @uem.edu.in and @iem.edu.in email addresses are allowed"}), 403
+
+    rec = otps_collection.find_one({"email": email})
+    if not rec:
         return jsonify({"error": "No OTP found. Please request a new one."}), 400
 
-    if datetime.now(timezone.utc) > stored["expires_at"]:
-        otp_store.pop(email, None)
+    # PyMongo returns naive datetimes (stored as UTC) — make the comparison explicit.
+    expires_at = rec.get("expires_at")
+    if expires_at is not None and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if not expires_at or datetime.now(timezone.utc) > expires_at:
+        otps_collection.delete_one({"email": email})
         return jsonify({"error": "OTP expired. Please request a new one."}), 400
 
-    if stored["otp"] != otp:
+    if rec.get("attempts", 0) >= MAX_OTP_ATTEMPTS:
+        otps_collection.delete_one({"email": email})
+        return jsonify({"error": "Too many incorrect attempts. Please request a new OTP."}), 429
+
+    # check_password_hash does a constant-time compare internally (no timing leak).
+    if not check_password_hash(rec.get("otp_hash", ""), otp):
+        otps_collection.update_one({"email": email}, {"$inc": {"attempts": 1}})
         return jsonify({"error": "Invalid OTP. Please try again."}), 400
 
-    otp_store.pop(email, None)
+    otps_collection.delete_one({"email": email})
 
     # Upsert student in DB
     students_collection.update_one(
@@ -188,14 +247,17 @@ def verify_otp():
     )
 
     name = email.split("@")[0].replace(".", " ").title()
+    user = {"email": email, "role": "student", "name": name}
     return jsonify({
         "success": True,
         "message": "Login successful",
-        "user": {"email": email, "role": "student", "name": name},
+        "user": user,
+        "token": generate_token(user),
     }), 200
 
 
 @auth_bp.route("/auth/student-register", methods=["POST"])
+@limiter.limit("10 per hour")
 def student_register():
     """Register a new student with email/password."""
     data     = request.get_json(silent=True) or {}
@@ -237,6 +299,7 @@ def student_register():
 
 
 @auth_bp.route("/auth/student-login", methods=["POST"])
+@limiter.limit("10 per minute")
 def student_login():
     """Login student with email/password."""
     data     = request.get_json(silent=True) or {}
@@ -262,19 +325,22 @@ def student_login():
         {"$set": {"last_login": datetime.now(timezone.utc)}},
     )
 
+    user = {
+        "email": email,
+        "role": "student",
+        "name": student.get("name", email.split("@")[0].title()),
+    }
     return jsonify({
         "success": True,
         "message": "Login successful",
-        "user": {
-            "email": email,
-            "role": "student",
-            "name": student.get("name", email.split("@")[0].title()),
-        },
+        "user": user,
+        "token": generate_token(user),
     }), 200
 
 
 
 @auth_bp.route("/auth/admin-login", methods=["POST"])
+@limiter.limit("10 per minute")
 def admin_login():
     """Validate admin credentials against all accounts defined in .env."""
     data     = request.get_json(silent=True) or {}
@@ -283,10 +349,12 @@ def admin_login():
 
     for admin in ADMINS:
         if email == admin["email"] and check_password_hash(admin["password_hash"], password):
+            user = {"email": email, "role": "admin", "name": admin["name"]}
             return jsonify({
                 "success": True,
                 "message": "Login successful",
-                "user": {"email": email, "role": "admin", "name": admin["name"]},
+                "user": user,
+                "token": generate_token(user),
             }), 200
 
     return jsonify({"error": "Invalid admin credentials"}), 401

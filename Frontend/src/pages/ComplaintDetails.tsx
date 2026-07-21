@@ -8,6 +8,7 @@ import {
 import StatusBadge from '@/components/StatusBadge';
 import { getComplaintById, resolvePhotoUrl } from '@/services/api';
 import { getStoredJSON } from '@/lib/storage';
+import { CATEGORY_META, DEFAULT_CATEGORY } from '@/lib/constants';
 import { AcceptFeedbackModal, ReopenModal } from '@/components/AcceptReopenModals';
 import { toast } from 'sonner';
 
@@ -18,15 +19,6 @@ const timelineSteps = [
   { label: 'Pending Acceptance', desc: 'Fix ready — awaiting student',   icon: AlertTriangle },
   { label: 'Completed',          desc: 'Issue resolved & accepted',      icon: CheckCircle2 },
 ];
-
-const categoryConfig: Record<string, { emoji: string; gradient: string }> = {
-  Electricity:    { emoji: '⚡', gradient: 'from-amber-500 to-yellow-500' },
-  Water:          { emoji: '💧', gradient: 'from-blue-500 to-cyan-500' },
-  Internet:       { emoji: '📡', gradient: 'from-violet-500 to-purple-500' },
-  Furniture:      { emoji: '🪑', gradient: 'from-orange-500 to-amber-500' },
-  Cleanliness:    { emoji: '🧹', gradient: 'from-emerald-500 to-green-500' },
-  Infrastructure: { emoji: '🏗️', gradient: 'from-slate-500 to-gray-500' },
-};
 
 const fmtTimestamp = (iso: string) => {
   if (!iso) return null;
@@ -190,7 +182,7 @@ const ComplaintDetails = () => {
     </div>
   );
 
-  const config = categoryConfig[complaint.category] || categoryConfig['Infrastructure'];
+  const meta = CATEGORY_META[complaint.category] || CATEGORY_META[DEFAULT_CATEGORY];
 
   // Map Reopened to its visual position in the timeline (same slot as Completed, shown differently)
   const displaySteps = complaint.status === 'Reopened'
@@ -309,11 +301,11 @@ const ComplaintDetails = () => {
               </button>
             </div>
           ) : (
-            <div className={`relative h-40 bg-gradient-to-r ${config.gradient} flex items-center justify-center overflow-hidden`}>
+            <div className={`relative h-40 bg-gradient-to-r ${meta.solidGradient} flex items-center justify-center overflow-hidden`}>
               <div className="absolute inset-0 bg-black/10" />
               <div className="absolute top-4 right-4 w-32 h-32 bg-white/10 rounded-full" />
               <div className="absolute bottom-4 left-8 w-20 h-20 bg-white/5 rounded-full" />
-              <span className="text-6xl relative z-10 drop-shadow-lg">{config.emoji}</span>
+              <span className="text-6xl relative z-10 drop-shadow-lg">{meta.emoji}</span>
             </div>
           )}
 

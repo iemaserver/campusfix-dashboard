@@ -1,9 +1,12 @@
 from flask import Blueprint, jsonify
 
+from utils.auth import require_admin
+
 admin_bp = Blueprint("admin", __name__)
 
 
 @admin_bp.route("/admin/complaints", methods=["GET"])
+@require_admin
 def admin_complaints():
     """Return all complaints for the admin dashboard."""
     from db import complaints_collection

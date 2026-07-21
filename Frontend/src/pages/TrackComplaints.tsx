@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getComplaints } from '@/services/api';
 import { getStoredJSON } from '@/lib/storage';
+import { STATUS_FILTERS } from '@/lib/constants';
 import ComplaintCard from '@/components/ComplaintCard';
 import { AcceptFeedbackModal, ReopenModal } from '@/components/AcceptReopenModals';
 import { Search, SlidersHorizontal, CheckCircle, RotateCcw } from 'lucide-react';
@@ -30,7 +31,7 @@ const TrackComplaints = () => {
     setComplaints(prev => prev.map(c => c._id === id ? { ...c, status: newStatus } : c));
   };
 
-  const statuses = ['All', 'Submitted', 'Assigned', 'In Progress', 'Pending Acceptance', 'Reopened', 'Completed'];
+  const statuses = STATUS_FILTERS;
 
   const filtered = complaints.filter(c => {
     const matchStatus = filter === 'All' || c.status === filter;

@@ -3,6 +3,7 @@ from bson import ObjectId
 from datetime import datetime, timezone
 
 from db import authorities_collection
+from utils.auth import require_admin
 from utils.helpers import is_valid_object_id
 
 authorities_bp = Blueprint("authorities", __name__)
@@ -19,6 +20,7 @@ def _serialize_authority(doc):
 
 
 @authorities_bp.route("/authorities", methods=["GET"])
+@require_admin
 def get_authorities():
     query = {}
     if request.args.get("category"):
@@ -28,6 +30,7 @@ def get_authorities():
 
 
 @authorities_bp.route("/authorities", methods=["POST"])
+@require_admin
 def add_authority():
     data = request.get_json(silent=True) or {}
     required = ["name", "email", "category"]
@@ -46,7 +49,34 @@ def add_authority():
     return jsonify({"success": True, "_id": str(result.inserted_id)}), 201
 
 
+@authorities_bp.route("/authorities/<authority_id>", methods=["PUT"])
+@require_admin
+def update_authority(authority_id):
+    if not is_valid_object_id(authority_id):
+        return jsonify({"error": "Invalid ID"}), 400
+
+    data = request.get_json(silent=True) or {}
+    required = ["name", "email", "category"]
+    missing = [f for f in required if not data.get(f)]
+    if missing:
+        return jsonify({"error": f"Missing fields: {', '.join(missing)}"}), 400
+
+    result = authorities_collection.update_one(
+        {"_id": ObjectId(authority_id)},
+        {"$set": {
+            "name": data["name"].strip(),
+            "email": data["email"].strip().lower(),
+            "phone": data.get("phone", "").strip(),
+            "category": data["category"].strip(),
+        }},
+    )
+    if result.matched_count == 0:
+        return jsonify({"error": "Authority not found"}), 404
+    return jsonify({"success": True}), 200
+
+
 @authorities_bp.route("/authorities/<authority_id>", methods=["DELETE"])
+@require_admin
 def delete_authority(authority_id):
     if not is_valid_object_id(authority_id):
         return jsonify({"error": "Invalid ID"}), 400

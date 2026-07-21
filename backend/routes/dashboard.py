@@ -1,16 +1,21 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, g
 from datetime import datetime, timezone, timedelta
 from db import complaints_collection
+from utils.auth import require_auth
 
 dashboard_bp = Blueprint("dashboard", __name__)
 
 
 @dashboard_bp.route("/dashboard", methods=["GET"])
+@require_auth
 def dashboard_stats():
-    """Return dashboard statistics with trends for a specific student."""
+    """Return dashboard statistics with trends, scoped to the caller."""
     query = {}
-    if request.args.get("student_email"):
-        query["student_email"] = request.args["student_email"].strip().lower()
+    if g.user["role"] == "admin":
+        if request.args.get("student_email"):
+            query["student_email"] = request.args["student_email"].strip().lower()
+    else:
+        query["student_email"] = g.user["email"]
 
     total    = complaints_collection.count_documents(query)
     pending  = complaints_collection.count_documents({**query, "status": {"$in": ["Submitted", "Assigned"]}})

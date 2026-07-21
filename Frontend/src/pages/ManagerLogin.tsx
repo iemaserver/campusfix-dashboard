@@ -22,6 +22,7 @@ const ManagerLogin = () => {
         toast.error('Login failed — unexpected server response');
         return;
       }
+      if (res.token) localStorage.setItem('auth_token', res.token);
       localStorage.setItem(SESSION_KEY, String(Date.now() + SESSION_DURATION));
       localStorage.setItem('admin_user', JSON.stringify(res.user));
       toast.success('Welcome, Admin!');

@@ -1,12 +1,13 @@
 import os
 import uuid
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, g
 from bson import ObjectId
 from datetime import datetime, timezone
 from werkzeug.utils import secure_filename
 
 from db import complaints_collection
 from models.complaint_model import create_complaint_doc
+from utils.auth import require_auth, require_admin
 from utils.helpers import serialize_complaint, is_valid_object_id, _fmt_ts
 from utils.email_queue import (
     send_complaint_raised_to_student,
@@ -23,22 +24,6 @@ ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 
 def _allowed_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
-
-
-def _is_admin_email(email: str) -> bool:
-    """Return True if the email matches any configured admin."""
-    if not email:
-        return False
-    email = email.strip().lower()
-    i = 1
-    while True:
-        admin_email = os.getenv(f"ADMIN_{i}_EMAIL")
-        if not admin_email:
-            break
-        if email == admin_email.strip().lower():
-            return True
-        i += 1
-    return False
 
 
 complaints_bp = Blueprint("complaints", __name__)
@@ -59,6 +44,7 @@ ALLOWED_TRANSITIONS = {
 
 
 @complaints_bp.route("/complaints", methods=["POST"])
+@require_auth
 def create_complaint():
     """Create a new complaint."""
     try:
@@ -66,6 +52,9 @@ def create_complaint():
             data = request.form.to_dict()
         else:
             data = request.get_json(silent=True) or {}
+
+        # Owner is always the authenticated caller — never trust a body field.
+        data["student_email"] = g.user["email"]
 
         required = ["category", "building", "floor", "room", "description"]
         missing = [f for f in required if not data.get(f)]
@@ -99,15 +88,20 @@ def create_complaint():
         }), 201
     except Exception as e:
         print(f"Error creating complaint: {e}")
-        return jsonify({"error": "Internal server error", "details": str(e)}), 500
+        return jsonify({"error": "Internal server error"}), 500
 
 
 @complaints_bp.route("/complaints", methods=["GET"])
+@require_auth
 def get_complaints():
-    """Return all complaints with optional filters."""
+    """Return complaints with optional filters. Students are scoped to their own."""
     query = {}
-    if request.args.get("student_email"):
-        query["student_email"] = request.args["student_email"].strip().lower()
+    if g.user["role"] == "admin":
+        if request.args.get("student_email"):
+            query["student_email"] = request.args["student_email"].strip().lower()
+    else:
+        # Non-admins may only ever see their own complaints, regardless of params.
+        query["student_email"] = g.user["email"]
     if request.args.get("status"):
         query["status"] = request.args["status"]
     if request.args.get("category"):
@@ -120,8 +114,9 @@ def get_complaints():
 
 
 @complaints_bp.route("/complaints/<complaint_id>", methods=["GET"])
+@require_auth
 def get_complaint(complaint_id):
-    """Return a single complaint by ID."""
+    """Return a single complaint by ID (own complaint only, unless admin)."""
     if not is_valid_object_id(complaint_id):
         return jsonify({"error": "Invalid complaint ID"}), 400
 
@@ -129,22 +124,22 @@ def get_complaint(complaint_id):
     if not doc:
         return jsonify({"error": "Complaint not found"}), 404
 
+    if g.user["role"] != "admin" and doc.get("student_email", "").lower() != g.user["email"]:
+        return jsonify({"error": "Forbidden"}), 403
+
     return jsonify(serialize_complaint(doc)), 200
 
 
 @complaints_bp.route("/complaints/<complaint_id>/status", methods=["PUT"])
+@require_admin
 def update_status(complaint_id):
-    """Update the status of a complaint."""
+    """Update the status of a complaint (admin only)."""
     if not is_valid_object_id(complaint_id):
         return jsonify({"error": "Invalid complaint ID"}), 400
 
     data = request.get_json(silent=True) or {}
     new_status = data.get("status")
-    admin_name = data.get("admin_name", "")
-    admin_email = data.get("admin_email", "").strip().lower()
-
-    if not _is_admin_email(admin_email):
-        return jsonify({"error": "Forbidden"}), 403
+    admin_name = g.user.get("name") or "Admin"
 
     if new_status not in ALLOWED_STATUSES:
         return jsonify({"error": f"Invalid status. Allowed: {', '.join(ALLOWED_STATUSES)}"}), 400
@@ -164,13 +159,16 @@ def update_status(complaint_id):
     if admin_name:
         history_entry["admin_name"] = admin_name
 
-    complaints_collection.update_one(
-        {"_id": ObjectId(complaint_id)},
+    # Conditional on the status we just read — closes the check-then-write race.
+    result = complaints_collection.update_one(
+        {"_id": ObjectId(complaint_id), "status": current_status},
         {
             "$set": {"status": new_status, "updated_at": now},
             "$push": {"status_history": history_entry},
         },
     )
+    if result.matched_count == 0:
+        return jsonify({"error": "Complaint status changed, please retry."}), 409
 
     # Send student email when admin marks pending acceptance
     if new_status == "Pending Acceptance":
@@ -182,14 +180,15 @@ def update_status(complaint_id):
 
 
 @complaints_bp.route("/complaints/<complaint_id>/assign", methods=["POST"])
+@require_admin
 def assign_complaint(complaint_id):
-    """Assign a complaint to an authority and set status to Assigned."""
+    """Assign a complaint to an authority and set status to Assigned (admin only)."""
     if not is_valid_object_id(complaint_id):
         return jsonify({"error": "Invalid complaint ID"}), 400
 
     data = request.get_json(silent=True) or {}
     authority_id = data.get("authority_id", "")
-    admin_name = data.get("admin_name", "Admin")
+    admin_name = g.user.get("name") or "Admin"
 
     if not is_valid_object_id(authority_id):
         return jsonify({"error": "Valid authority_id required"}), 400
@@ -249,6 +248,7 @@ def assign_complaint(complaint_id):
 
 
 @complaints_bp.route("/complaints/<complaint_id>/accept", methods=["POST"])
+@require_auth
 def accept_complaint(complaint_id):
     """Student accepts the fix and provides feedback."""
     if not is_valid_object_id(complaint_id):
@@ -256,11 +256,8 @@ def accept_complaint(complaint_id):
 
     data = request.get_json(silent=True) or {}
     feedback = data.get("feedback", "").strip()
-    student_name = data.get("student_name", "Student")
-    student_email = data.get("student_email", "").strip().lower()
-
-    if not student_email:
-        return jsonify({"error": "student_email is required"}), 400
+    student_email = g.user["email"]
+    student_name = g.user.get("name") or "Student"
 
     doc = complaints_collection.find_one({"_id": ObjectId(complaint_id)})
     if not doc:
@@ -273,8 +270,9 @@ def accept_complaint(complaint_id):
         return jsonify({"error": "Complaint is not awaiting acceptance"}), 409
 
     now = datetime.now(timezone.utc)
+    # Conditional on "Pending Acceptance" — two concurrent accepts can't both win.
     result = complaints_collection.update_one(
-        {"_id": ObjectId(complaint_id)},
+        {"_id": ObjectId(complaint_id), "status": "Pending Acceptance"},
         {
             "$set": {
                 "status": "Completed",
@@ -289,7 +287,7 @@ def accept_complaint(complaint_id):
         },
     )
     if result.matched_count == 0:
-        return jsonify({"error": "Complaint not found"}), 404
+        return jsonify({"error": "Complaint is not awaiting acceptance"}), 409
 
     doc = complaints_collection.find_one({"_id": ObjectId(complaint_id)})
     if doc:
@@ -299,6 +297,7 @@ def accept_complaint(complaint_id):
 
 
 @complaints_bp.route("/complaints/<complaint_id>/reopen", methods=["POST"])
+@require_auth
 def reopen_complaint(complaint_id):
     """Student reopens the complaint with a reason."""
     if not is_valid_object_id(complaint_id):
@@ -306,11 +305,8 @@ def reopen_complaint(complaint_id):
 
     data = request.get_json(silent=True) or {}
     reason = data.get("reason", "").strip()
-    student_name = data.get("student_name", "Student")
-    student_email = data.get("student_email", "").strip().lower()
-
-    if not student_email:
-        return jsonify({"error": "student_email is required"}), 400
+    student_email = g.user["email"]
+    student_name = g.user.get("name") or "Student"
 
     if not reason:
         return jsonify({"error": "A reason is required to reopen the complaint."}), 400
@@ -326,8 +322,9 @@ def reopen_complaint(complaint_id):
         return jsonify({"error": "Complaint is not awaiting acceptance"}), 409
 
     now = datetime.now(timezone.utc)
+    # Conditional on "Pending Acceptance" — closes the check-then-write race.
     result = complaints_collection.update_one(
-        {"_id": ObjectId(complaint_id)},
+        {"_id": ObjectId(complaint_id), "status": "Pending Acceptance"},
         {
             "$set": {
                 "status": "Reopened",
@@ -343,7 +340,7 @@ def reopen_complaint(complaint_id):
         },
     )
     if result.matched_count == 0:
-        return jsonify({"error": "Complaint not found"}), 404
+        return jsonify({"error": "Complaint is not awaiting acceptance"}), 409
 
     doc = complaints_collection.find_one({"_id": ObjectId(complaint_id)})
     if doc:
@@ -353,6 +350,7 @@ def reopen_complaint(complaint_id):
 
 
 @complaints_bp.route("/complaints/recurring", methods=["GET"])
+@require_admin
 def recurring_complaints():
     """Return rooms/categories with 3+ complaints (recurring issues)."""
     pipeline = [

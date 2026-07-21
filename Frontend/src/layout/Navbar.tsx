@@ -38,6 +38,7 @@ const Navbar = () => {
   const visibleNavItems = isAdminLoggedIn ? adminNavItems : studentNavItems;
 
   const handleLogout = () => {
+    localStorage.removeItem('auth_token');
     if (isAdminLoggedIn) {
       localStorage.removeItem(ADMIN_SESSION_KEY);
       localStorage.removeItem('admin_user');

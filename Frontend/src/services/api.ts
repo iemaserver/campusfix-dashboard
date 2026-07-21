@@ -29,6 +29,44 @@ const API = axios.create({
   },
 });
 
+export const AUTH_TOKEN_KEY = 'auth_token';
+
+/** Clear every trace of a local session. */
+export const clearSession = () => {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem('student_user');
+  localStorage.removeItem('admin_user');
+  localStorage.removeItem('admin_session');
+};
+
+// Attach the bearer token (if logged in) to every outgoing request.
+API.interceptors.request.use((config) => {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// On an expired/invalid session (401) the server rejects the call — wipe local
+// auth and bounce to the welcome page. Skipped for /auth/* calls, whose 401s mean
+// "bad credentials" and are surfaced inline by the login pages.
+API.interceptors.response.use(
+  (res) => res,
+  (error) => {
+    if (axios.isAxiosError(error)) {
+      const url = error.config?.url ?? '';
+      if (error.response?.status === 401 && !url.includes('/auth/')) {
+        clearSession();
+        if (!window.location.pathname.startsWith('/welcome')) {
+          window.location.href = '/welcome';
+        }
+      }
+    }
+    return Promise.reject(error);
+  },
+);
+
 // ── Auth ─────────────────────────────────────────────────────────────────
 export const studentRegister = async (name: string, email: string, password: string) => {
   try {
@@ -118,6 +156,11 @@ export const getAuthorities = async (category?: string) => {
 
 export const addAuthority = async (data: { name: string; email: string; phone: string; category: string }) => {
   const res = await API.post('/authorities', data);
+  return res.data;
+};
+
+export const updateAuthority = async (id: string, data: { name: string; email: string; phone: string; category: string }) => {
+  const res = await API.put(`/authorities/${id}`, data);
   return res.data;
 };
 

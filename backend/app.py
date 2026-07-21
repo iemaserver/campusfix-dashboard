@@ -7,6 +7,7 @@ from flask import Flask, send_from_directory, jsonify
 from flask_cors import CORS
 
 import utils.email_queue  # noqa: F401 — starts background email worker thread
+from extensions import limiter
 from routes.complaints import complaints_bp
 from routes.admin import admin_bp
 from routes.dashboard import dashboard_bp
@@ -20,7 +21,12 @@ app = Flask(__name__)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 # Cap request bodies (incl. uploads) at 5 MB to prevent memory-exhaustion DoS.
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
-CORS(app, resources={r"/campusfix/api/*": {"origins": "*"}})
+# Restrict browser access to the configured frontend origin(s). Override in prod
+# via CORS_ORIGINS (comma-separated). Defaults to the local Vite dev server.
+_default_origins = "http://localhost:8080,http://127.0.0.1:8080"
+CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", _default_origins).split(",") if o.strip()]
+CORS(app, resources={r"/campusfix/api/*": {"origins": CORS_ORIGINS}})
+limiter.init_app(app)
 
 
 @app.errorhandler(413)
@@ -47,4 +53,6 @@ def uploaded_file(filename):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(debug=True, port=port)
+    # Never default the Werkzeug debugger on — it allows RCE via the console.
+    debug = os.getenv("FLASK_DEBUG", "").lower() in ("1", "true", "yes", "on")
+    app.run(debug=debug, port=port)

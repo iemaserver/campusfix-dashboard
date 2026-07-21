@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   AlertCircle, Clock, CheckCircle2, Eye, Shield, RefreshCw,
   ChevronLeft, ChevronRight, Ticket, Mail, Download, FileSpreadsheet,
-  X, UserCheck, UserPlus, Users, Plus, Trash2, Loader2, Wrench,
+  X, UserCheck, UserPlus, Users, Plus, Pencil, Save, Trash2, Loader2, Wrench, Search, ScrollText,
 } from 'lucide-react';
 import {
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip as ReTooltip,
@@ -13,16 +13,16 @@ import DashboardCard from '@/components/DashboardCard';
 import StatusBadge from '@/components/StatusBadge';
 import {
   getAdminComplaints, updateComplaintStatus, getRecurringComplaints,
-  getAuthorities, addAuthority, deleteAuthority, assignComplaint,
+  getAuthorities, addAuthority, updateAuthority, deleteAuthority, assignComplaint,
 } from '@/services/api';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { getStoredJSON } from '@/lib/storage';
+import { CATEGORIES, categoryEmoji } from '@/lib/constants';
 import * as XLSX from 'xlsx';
 
 const SESSION_KEY = 'admin_session';
 const PAGE_SIZE   = 10;
-const CATEGORIES  = ['Electricity', 'Water', 'Internet', 'Furniture', 'Cleanliness', 'Infrastructure'];
 
 const fmtTimestamp = (iso: string) => {
   if (!iso) return '—';
@@ -178,30 +178,49 @@ const AssignModal = ({
 const ManageAuthorityPanel = ({ onClose }: { onClose: () => void }) => {
   const [authorities, setAuthorities] = useState<Authority[]>([]);
   const [form, setForm] = useState({ name: '', email: '', phone: '', category: CATEGORIES[0] });
-  const [adding, setAdding] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const formRef = useRef<HTMLDivElement>(null);
 
   const load = () => getAuthorities().then(setAuthorities).catch(() => {});
   useEffect(() => { load(); }, []);
 
-  const handleAdd = async (e: React.FormEvent) => {
+  const resetForm = () => {
+    setEditingId(null);
+    setForm({ name: '', email: '', phone: '', category: CATEGORIES[0] });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAdding(true);
+    setSaving(true);
     try {
-      await addAuthority(form);
-      toast.success('Authority added');
-      setForm(f => ({ ...f, name: '', email: '', phone: '' }));
+      if (editingId) {
+        await updateAuthority(editingId, form);
+        toast.success('Authority updated');
+      } else {
+        await addAuthority(form);
+        toast.success('Authority added');
+      }
+      resetForm();
       load();
     } catch {
-      toast.error('Failed to add authority');
+      toast.error(editingId ? 'Failed to update authority' : 'Failed to add authority');
     } finally {
-      setAdding(false);
+      setSaving(false);
     }
+  };
+
+  const startEdit = (a: Authority) => {
+    setEditingId(a._id);
+    setForm({ name: a.name, email: a.email, phone: a.phone, category: a.category });
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const handleDelete = async (id: string) => {
     try {
       await deleteAuthority(id);
       setAuthorities(prev => prev.filter(a => a._id !== id));
+      if (editingId === id) resetForm();
       toast.success('Authority removed');
     } catch {
       toast.error('Failed to remove authority');
@@ -229,10 +248,10 @@ const ManageAuthorityPanel = ({ onClose }: { onClose: () => void }) => {
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Add form */}
-          <div className="bg-muted/30 rounded-2xl p-5 border border-border/30">
-            <h3 className="text-sm font-bold text-foreground mb-4">Add New Authority</h3>
-            <form onSubmit={handleAdd} className="space-y-3">
+          {/* Add / Edit form */}
+          <div ref={formRef} className="bg-muted/30 rounded-2xl p-5 border border-border/30">
+            <h3 className="text-sm font-bold text-foreground mb-4">{editingId ? 'Edit Authority' : 'Add New Authority'}</h3>
+            <form onSubmit={handleSubmit} className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input
                   placeholder="Full Name *"
@@ -263,14 +282,25 @@ const ManageAuthorityPanel = ({ onClose }: { onClose: () => void }) => {
                   {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-              <button
-                type="submit"
-                disabled={adding}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl gradient-primary text-primary-foreground text-sm font-bold shadow-button hover:opacity-90 transition-all disabled:opacity-40"
-              >
-                {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                Add Authority
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl gradient-primary text-primary-foreground text-sm font-bold shadow-button hover:opacity-90 transition-all disabled:opacity-40"
+                >
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editingId ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                  {editingId ? 'Save Changes' : 'Add Authority'}
+                </button>
+                {editingId && (
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="px-5 py-2.5 rounded-xl border border-border/40 text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
             </form>
           </div>
 
@@ -285,7 +315,11 @@ const ManageAuthorityPanel = ({ onClose }: { onClose: () => void }) => {
                   {items.map(a => (
                     <div
                       key={a._id}
-                      className="flex items-center justify-between p-3 rounded-xl bg-muted/20 border border-border/30 hover:bg-muted/40 transition-colors"
+                      className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${
+                        editingId === a._id
+                          ? 'bg-primary/5 border-primary/50'
+                          : 'bg-muted/20 border-border/30 hover:bg-muted/40'
+                      }`}
                     >
                       <div>
                         <p className="text-sm font-semibold text-foreground">{a.name}</p>
@@ -293,13 +327,22 @@ const ManageAuthorityPanel = ({ onClose }: { onClose: () => void }) => {
                           {a.email}{a.phone ? ` · ${a.phone}` : ''}
                         </p>
                       </div>
-                      <button
-                        onClick={() => handleDelete(a._id)}
-                        className="p-2 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
-                        title="Remove authority"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => startEdit(a)}
+                          className="p-2 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
+                          title="Edit authority"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(a._id)}
+                          className="p-2 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                          title="Remove authority"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -317,6 +360,7 @@ const AdminDashboard = () => {
   const [complaints, setComplaints] = useState<any[]>([]);
   const [recurring, setRecurring]   = useState<any[]>([]);
   const [page, setPage]             = useState(1);
+  const [search, setSearch]         = useState('');
   const [showExport, setShowExport] = useState(false);
   const [exportFrom, setExportFrom] = useState('');
   const [exportTo, setExportTo]     = useState('');
@@ -425,8 +469,17 @@ const AdminDashboard = () => {
     return entries.map(({ month, count }) => ({ month, count }));
   })();
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const paginated  = complaints.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  // Audit-log search: match ticket number or raised-by email (case-insensitive).
+  const q = search.trim().toLowerCase();
+  const filteredComplaints = q
+    ? complaints.filter(c =>
+        (c.ticket_number || '').toLowerCase().includes(q) ||
+        (c.student_email || '').toLowerCase().includes(q))
+    : complaints;
+
+  const filteredTotal = filteredComplaints.length;
+  const totalPages = Math.max(1, Math.ceil(filteredTotal / PAGE_SIZE));
+  const paginated  = filteredComplaints.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div className="space-y-8">
@@ -467,7 +520,7 @@ const AdminDashboard = () => {
             Export XLSX
           </button>
           <button
-            onClick={() => { localStorage.removeItem(SESSION_KEY); localStorage.removeItem('admin_user'); navigate('/welcome'); }}
+            onClick={() => { localStorage.removeItem('auth_token'); localStorage.removeItem(SESSION_KEY); localStorage.removeItem('admin_user'); navigate('/welcome'); }}
             className="text-sm text-muted-foreground hover:text-destructive transition-colors font-medium"
           >
             Sign out
@@ -620,8 +673,25 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Table */}
+      {/* Audit Logs */}
       <div className="bg-card rounded-2xl shadow-card border border-border/40 overflow-hidden animate-slide-up" style={{ animationDelay: '200ms' }}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 border-b border-border/40 bg-muted/30">
+          <div className="flex items-center gap-2">
+            <ScrollText className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-bold font-display text-foreground uppercase tracking-wider">Audit Logs</h2>
+            <span className="text-xs text-muted-foreground">({filteredTotal})</span>
+          </div>
+          <div className="relative w-full sm:w-80">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Search by ticket ID or email…"
+              className="w-full pl-9 pr-3 py-2 rounded-xl border border-border/40 bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-primary transition-all"
+            />
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -653,9 +723,7 @@ const AdminDashboard = () => {
                   {/* Category */}
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-2">
-                      <span className="text-lg leading-none">
-                        {c.category === 'Electricity' ? '⚡' : c.category === 'Water' ? '💧' : c.category === 'Internet' ? '📡' : c.category === 'Furniture' ? '🪑' : c.category === 'Cleanliness' ? '🧹' : '🏗️'}
-                      </span>
+                      <span className="text-lg leading-none">{categoryEmoji(c.category)}</span>
                       <span className="font-medium text-foreground">{c.category}</span>
                     </div>
                   </td>
@@ -742,7 +810,7 @@ const AdminDashboard = () => {
               {paginated.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-5 py-12 text-center text-muted-foreground text-sm">
-                    {loading ? 'Loading complaints…' : 'No complaints found.'}
+                    {loading ? 'Loading complaints…' : q ? 'No matching complaints.' : 'No complaints found.'}
                   </td>
                 </tr>
               )}
@@ -754,8 +822,8 @@ const AdminDashboard = () => {
         <div className="flex items-center justify-between px-5 py-4 border-t border-border/30 bg-muted/20">
           <p className="text-xs text-muted-foreground">
             Showing{' '}
-            <span className="font-semibold text-foreground">{Math.min((page - 1) * PAGE_SIZE + 1, total)}–{Math.min(page * PAGE_SIZE, total)}</span>{' '}
-            of <span className="font-semibold text-foreground">{total}</span> complaints
+            <span className="font-semibold text-foreground">{Math.min((page - 1) * PAGE_SIZE + 1, filteredTotal)}–{Math.min(page * PAGE_SIZE, filteredTotal)}</span>{' '}
+            of <span className="font-semibold text-foreground">{filteredTotal}</span> complaints
           </p>
           <div className="flex items-center gap-2">
             <button

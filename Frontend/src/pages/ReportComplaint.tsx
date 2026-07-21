@@ -3,16 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Send, Upload, QrCode, MapPin, FileText, ChevronDown, X } from 'lucide-react';
 import { createComplaint } from '@/services/api';
 import { getStoredJSON } from '@/lib/storage';
+import { CATEGORIES, categoryEmoji } from '@/lib/constants';
 import { toast } from 'sonner';
 
-const categories = [
-  { label: 'Electricity', emoji: '⚡' },
-  { label: 'Furniture', emoji: '🪑' },
-  { label: 'Water', emoji: '💧' },
-  { label: 'Internet', emoji: '📡' },
-  { label: 'Cleanliness', emoji: '🧹' },
-  { label: 'Infrastructure', emoji: '🏗️' },
-];
+const categories = CATEGORIES.map(label => ({ label, emoji: categoryEmoji(label) }));
 
 const ReportComplaint = () => {
   const navigate = useNavigate();

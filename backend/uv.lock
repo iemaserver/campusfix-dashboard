@@ -1,6 +1,10 @@
 version = 1
 revision = 3
 requires-python = ">=3.11"
+resolution-markers = [
+    "python_full_version >= '3.14'",
+    "python_full_version < '3.14'",
+]
 
 [[package]]
 name = "backend"
@@ -23,7 +27,7 @@ requires-dist = [
     { name = "dnspython", specifier = ">=2.7.0" },
     { name = "flask", specifier = ">=3.1.0" },
     { name = "flask-cors", specifier = ">=5.0.1" },
-    { name = "google-auth", specifier = ">=2.52.0" },
+    { name = "google-auth", specifier = ">=2.56.1" },
     { name = "pymongo", specifier = ">=4.17.0" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
     { name = "requests", specifier = ">=2.34.1" },
@@ -327,15 +331,15 @@ wheels = [
 
 [[package]]
 name = "google-auth"
-version = "2.52.0"
+version = "2.56.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
     { name = "pyasn1-modules" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d4/f8/80d2493cbedece1c623dc3e3cb1883300871af0dcdae254409522985ac23/google_auth-2.52.0.tar.gz", hash = "sha256:01f30e1a9e3638698d89464f5e603ce29d18e1c0e63ec31ac570aba4e164aaf5", size = 335027, upload-time = "2026-05-07T19:45:24.033Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ed/a6/be1b705ceadfbcbb20dd501ed3682560ed574ea3c756a3944deca5187df6/google_auth-2.56.1.tar.gz", hash = "sha256:9fd80dc51a58f44407d11f8e8e3ed3e26b407606e0ca181be728ad4dd77d1cdf", size = 364946, upload-time = "2026-07-21T16:34:03.206Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ee/fc/2cdc74252746f547f81ff3f02d4d4234a3f411b5de5b61af97e633a060b9/google_auth-2.52.0-py3-none-any.whl", hash = "sha256:aee92803ba0ff93a70a3b8a35c7b4797837751cd6380b63ff38372b98f3ed627", size = 245614, upload-time = "2026-05-07T19:45:21.914Z" },
+    { url = "https://files.pythonhosted.org/packages/f2/fd/3a0c054918478bbb8d72a5401c3567d2173e51bb3a323679b4b02103d26d/google_auth-2.56.1-py3-none-any.whl", hash = "sha256:dd8a555988ca88c7158927fe22883ec065ca0f0f27d0077b419365a004df77d3", size = 258235, upload-time = "2026-07-21T16:33:59.596Z" },
 ]
 
 [[package]]

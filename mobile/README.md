@@ -31,47 +31,94 @@ lib/
 The bearer token, cached user, and server URL are persisted with `shared_preferences`. Every
 request carries `Authorization: Bearer <token>`; a `401` on a protected route logs you out.
 
-## Running it
+## First-time setup (fresh clone)
 
-1. **Start the backend** (from the repo root):
+You need **two things running** — the backend on your computer and the app on your phone — both on
+the **same Wi-Fi network**.
 
-   ```bash
-   cd ../backend
-   source venv/bin/activate
-   python app.py            # serves http://127.0.0.1:5000
-   ```
+**Prerequisites:** [Flutter SDK](https://docs.flutter.dev/get-started/install), plus the Android SDK
+(for Android) and/or Xcode + CocoaPods (for iOS, macOS only). Verify with `flutter doctor`.
 
-2. **Run the app:**
+### Terminal 1 — start the backend (on the computer)
 
-   ```bash
-   cd mobile
-   flutter pub get
-   flutter run              # pick your device / emulator / simulator
-   ```
+```bash
+cd backend
+python3 -m venv venv            # only if venv/ isn't there yet
+source venv/bin/activate        # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+PORT=8000 python app.py
+```
 
-### Pointing the app at your backend
+You should see `Running on http://0.0.0.0:8000`. The `.env` (DB/SMTP config) is committed, so there's
+nothing else to configure. Leave this running.
 
-The app defaults the server address per platform:
+> **Why port 8000?** On macOS, AirPlay Receiver squats on port 5000 and will intercept the phone's
+> requests. Any free port works — 8000 is just the convention used here. `HOST` defaults to `0.0.0.0`
+> so devices on the LAN can reach it (set `HOST=127.0.0.1` to restrict to localhost).
 
-| Target                | Default base URL                              |
-| --------------------- | --------------------------------------------- |
-| Android emulator      | `http://10.0.2.2:5000/campusfix/api`          |
-| iOS simulator / other | `http://127.0.0.1:5000/campusfix/api`         |
+**Find the computer's LAN IP** — the app needs it (yours will differ):
 
-`10.0.2.2` is the Android emulator's alias for your host machine. On a **physical phone**, use your
-computer's LAN IP (e.g. `http://192.168.1.5:5000/campusfix/api`) and make sure the phone is on the
-same network. You can change and **Test** the address any time from **Welcome → ⚙︎** or
-**Profile → Server Settings** — no rebuild needed.
+```bash
+ipconfig getifaddr en0            # macOS (Wi-Fi)
+hostname -I | awk '{print $1}'    # Linux
+ipconfig                          # Windows → "IPv4 Address" under your Wi-Fi adapter
+```
+
+Example result: `192.168.1.42`.
+
+### Terminal 2 — run the app on the phone
+
+```bash
+cd mobile
+flutter pub get
+flutter devices                 # confirm the phone is listed
+flutter run                     # pick the phone if prompted
+```
+
+- **Android phone:** enable **Developer options → USB debugging**, connect USB, tap **Allow**.
+- **iPhone:** open `ios/Runner.xcworkspace` in Xcode once to set a signing team (a free Apple ID
+  works for development), then `flutter run`.
+
+### Point the app at the backend (one time)
+
+The built-in defaults only fit an emulator, so on a **physical phone** you set the address once — it's
+saved on the device, no rebuild needed:
+
+1. On the **Welcome** screen tap **⚙**, or after logging in go to **Profile → Server Settings**.
+2. Enter `http://<YOUR_IP>:8000/campusfix/api` (e.g. `http://192.168.1.42:8000/campusfix/api`).
+3. Tap **Test Connection** → it should say **“Connected.”**
+
+Then log in with your `@uem.edu.in` / `@iem.edu.in` email. Done.
+
+For reference, the per-platform defaults (used only if you never change the address):
+
+| Target                | Default base URL                        |
+| --------------------- | --------------------------------------- |
+| Android emulator      | `http://10.0.2.2:5000/campusfix/api`    |
+| iOS simulator / other | `http://127.0.0.1:5000/campusfix/api`   |
+
+`10.0.2.2` is the Android emulator's alias for the host machine.
+
+### Troubleshooting “Test Connection” fails
+
+- Phone and computer on the **same Wi-Fi**? (Guest networks often block device-to-device traffic.)
+- **macOS firewall:** System Settings → Network → Firewall → allow incoming for Python (or disable to test).
+- Re-check the IP — laptops get a new one when they switch networks.
 
 Cleartext HTTP is enabled for development (Android `usesCleartextTraffic`, iOS ATS arbitrary loads)
 because the backend runs over plain HTTP locally. For a production HTTPS backend, tighten both.
 
-## Build
+## Build an installable APK
 
 ```bash
-flutter build apk           # Android (release)
-flutter build ios           # iOS (requires a full Xcode install + signing)
+flutter build apk --release     # → build/app/outputs/flutter-apk/app-release.apk
+flutter build apk --release --split-per-abi   # smaller, per-architecture (most phones: arm64-v8a)
+flutter install                 # build + install to the connected device
+flutter build ios               # iOS (requires a full Xcode install + signing)
 ```
+
+Copy `app-release.apk` to the phone (Drive / email / USB) and tap it — accept **install from unknown
+sources**. The same Settings step above applies after installing.
 
 ## Tests / analysis
 

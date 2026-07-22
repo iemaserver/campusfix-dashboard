@@ -21,11 +21,7 @@ app = Flask(__name__)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 # Cap request bodies (incl. uploads) at 5 MB to prevent memory-exhaustion DoS.
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024
-# Restrict browser access to the configured frontend origin(s). Override in prod
-# via CORS_ORIGINS (comma-separated). Defaults to the local Vite dev server.
-_default_origins = "http://localhost:8080,http://127.0.0.1:8080"
-CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", _default_origins).split(",") if o.strip()]
-CORS(app, resources={r"/campusfix/api/*": {"origins": CORS_ORIGINS}})
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 limiter.init_app(app)
 
 

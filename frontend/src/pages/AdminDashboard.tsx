@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   AlertCircle, Clock, CheckCircle2, Eye, Shield, RefreshCw,
-  ChevronLeft, ChevronRight, Ticket, Mail, Download, FileSpreadsheet,
-  X, UserCheck, UserPlus, Users, Plus, Trash2, Loader2, Wrench,
+  ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Ticket, Mail, Download, FileSpreadsheet,
+  X, UserCheck, UserPlus, Users, Plus, Pencil, Save, Trash2, Loader2, Wrench, Search, ScrollText,
+  Bell, Zap,
 } from 'lucide-react';
 import {
   ResponsiveContainer, PieChart, Pie, Cell, Tooltip as ReTooltip,
@@ -13,15 +14,19 @@ import DashboardCard from '@/components/DashboardCard';
 import StatusBadge from '@/components/StatusBadge';
 import {
   getAdminComplaints, updateComplaintStatus, getRecurringComplaints,
-  getAuthorities, addAuthority, deleteAuthority, assignComplaint,
+  getAuthorities, addAuthority, updateAuthority, deleteAuthority, assignComplaint,
+  getCategorySettings, updateCategorySettings,
+  getNotificationEmails, addNotificationEmail, deleteNotificationEmail,
+  type CategorySettings,
 } from '@/services/api';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { getStoredJSON } from '@/lib/storage';
+import { CATEGORIES, categoryEmoji } from '@/lib/constants';
 import * as XLSX from 'xlsx';
 
 const SESSION_KEY = 'admin_session';
 const PAGE_SIZE   = 10;
-const CATEGORIES  = ['Electricity', 'Water', 'Internet', 'Furniture', 'Cleanliness', 'Infrastructure'];
 
 const fmtTimestamp = (iso: string) => {
   if (!iso) return '—';
@@ -176,42 +181,123 @@ const AssignModal = ({
 // ── ManageAuthorityPanel ──────────────────────────────────────────────────────
 const ManageAuthorityPanel = ({ onClose }: { onClose: () => void }) => {
   const [authorities, setAuthorities] = useState<Authority[]>([]);
-  const [form, setForm] = useState({ name: '', email: '', phone: '', category: CATEGORIES[0] });
-  const [adding, setAdding] = useState(false);
+  const [settings, setSettings] = useState<CategorySettings[]>([]);
+  const [form, setForm] = useState<{ name: string; email: string; phone: string; category: string }>(
+    { name: '', email: '', phone: '', category: CATEGORIES[0] },
+  );
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const formRef = useRef<HTMLDivElement>(null);
 
-  const load = () => getAuthorities().then(setAuthorities).catch(() => {});
+  const load = () => {
+    getAuthorities().then(setAuthorities).catch(() => {});
+    getCategorySettings().then(setSettings).catch(() => {});
+  };
   useEffect(() => { load(); }, []);
 
-  const handleAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAdding(true);
+  const settingsFor = (cat: string) => settings.find(s => s.category === cat);
+
+  const applySettings = (partial: { category: string } & Partial<CategorySettings>) => {
+    setSettings(prev => {
+      const idx = prev.findIndex(s => s.category === partial.category);
+      if (idx === -1) {
+        return [...prev, {
+          category: partial.category,
+          auto_assign: partial.auto_assign ?? false,
+          priority_order: partial.priority_order ?? [],
+        }];
+      }
+      const next = [...prev];
+      next[idx] = { ...next[idx], ...partial };
+      return next;
+    });
+  };
+
+  // Authorities of a category ordered by the saved priority_order; unranked appended by name.
+  const orderedForCategory = (cat: string): Authority[] => {
+    const items = authorities.filter(a => a.category === cat);
+    const byId = new Map(items.map(a => [a._id, a]));
+    const seen = new Set<string>();
+    const ranked: Authority[] = [];
+    for (const id of settingsFor(cat)?.priority_order ?? []) {
+      const a = byId.get(id);
+      if (a && !seen.has(id)) { ranked.push(a); seen.add(id); }
+    }
+    const rest = items.filter(a => !seen.has(a._id)).sort((a, b) => a.name.localeCompare(b.name));
+    return [...ranked, ...rest];
+  };
+
+  const handleToggleAuto = async (cat: string) => {
+    const next = !(settingsFor(cat)?.auto_assign ?? false);
+    applySettings({ category: cat, auto_assign: next });   // optimistic
     try {
-      await addAuthority(form);
-      toast.success('Authority added');
-      setForm(f => ({ ...f, name: '', email: '', phone: '' }));
+      await updateCategorySettings({ category: cat, auto_assign: next });
+      toast.success(`Auto-assign ${next ? 'ON' : 'OFF'} for ${cat}`);
+    } catch {
+      toast.error('Failed to update auto-assign');
+      load();
+    }
+  };
+
+  const handleReorder = async (cat: string, index: number, dir: -1 | 1) => {
+    const ordered = orderedForCategory(cat);
+    const target = index + dir;
+    if (target < 0 || target >= ordered.length) return;
+    const arr = [...ordered];
+    [arr[index], arr[target]] = [arr[target], arr[index]];
+    const ids = arr.map(a => a._id);
+    applySettings({ category: cat, priority_order: ids });  // optimistic
+    try {
+      await updateCategorySettings({ category: cat, priority_order: ids });
+    } catch {
+      toast.error('Failed to save priority order');
+      load();
+    }
+  };
+
+  const resetForm = () => {
+    setEditingId(null);
+    setForm({ name: '', email: '', phone: '', category: CATEGORIES[0] });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      if (editingId) {
+        await updateAuthority(editingId, form);
+        toast.success('Authority updated');
+      } else {
+        await addAuthority(form);
+        toast.success('Authority added');
+      }
+      resetForm();
       load();
     } catch {
-      toast.error('Failed to add authority');
+      toast.error(editingId ? 'Failed to update authority' : 'Failed to add authority');
     } finally {
-      setAdding(false);
+      setSaving(false);
     }
+  };
+
+  const startEdit = (a: Authority) => {
+    setEditingId(a._id);
+    setForm({ name: a.name, email: a.email, phone: a.phone, category: a.category });
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const handleDelete = async (id: string) => {
     try {
       await deleteAuthority(id);
       setAuthorities(prev => prev.filter(a => a._id !== id));
+      if (editingId === id) resetForm();
       toast.success('Authority removed');
     } catch {
       toast.error('Failed to remove authority');
     }
   };
 
-  const grouped = CATEGORIES.reduce<Record<string, Authority[]>>((acc, cat) => {
-    const items = authorities.filter(a => a.category === cat);
-    if (items.length > 0) acc[cat] = items;
-    return acc;
-  }, {});
+  const activeCategories = CATEGORIES.filter(cat => authorities.some(a => a.category === cat));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -228,10 +314,10 @@ const ManageAuthorityPanel = ({ onClose }: { onClose: () => void }) => {
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* Add form */}
-          <div className="bg-muted/30 rounded-2xl p-5 border border-border/30">
-            <h3 className="text-sm font-bold text-foreground mb-4">Add New Authority</h3>
-            <form onSubmit={handleAdd} className="space-y-3">
+          {/* Add / Edit form */}
+          <div ref={formRef} className="bg-muted/30 rounded-2xl p-5 border border-border/30">
+            <h3 className="text-sm font-bold text-foreground mb-4">{editingId ? 'Edit Authority' : 'Add New Authority'}</h3>
+            <form onSubmit={handleSubmit} className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input
                   placeholder="Full Name *"
@@ -262,48 +348,221 @@ const ManageAuthorityPanel = ({ onClose }: { onClose: () => void }) => {
                   {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-              <button
-                type="submit"
-                disabled={adding}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl gradient-primary text-primary-foreground text-sm font-bold shadow-button hover:opacity-90 transition-all disabled:opacity-40"
-              >
-                {adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                Add Authority
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl gradient-primary text-primary-foreground text-sm font-bold shadow-button hover:opacity-90 transition-all disabled:opacity-40"
+                >
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editingId ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                  {editingId ? 'Save Changes' : 'Add Authority'}
+                </button>
+                {editingId && (
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="px-5 py-2.5 rounded-xl border border-border/40 text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
             </form>
           </div>
 
-          {/* Authority list */}
-          {Object.keys(grouped).length === 0 ? (
+          {/* Authority list — grouped by category, with auto-assign toggle + priority order */}
+          {activeCategories.length === 0 ? (
             <p className="text-center text-muted-foreground text-sm py-6">No authorities added yet.</p>
           ) : (
-            Object.entries(grouped).map(([cat, items]) => (
-              <div key={cat}>
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">{cat}</p>
-                <div className="space-y-2">
-                  {items.map(a => (
-                    <div
-                      key={a._id}
-                      className="flex items-center justify-between p-3 rounded-xl bg-muted/20 border border-border/30 hover:bg-muted/40 transition-colors"
-                    >
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">{a.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {a.email}{a.phone ? ` · ${a.phone}` : ''}
-                        </p>
-                      </div>
+            activeCategories.map(cat => {
+              const items = orderedForCategory(cat);
+              const auto = settingsFor(cat)?.auto_assign ?? false;
+              return (
+                <div key={cat}>
+                  {/* Category header: name + per-category auto-assign toggle */}
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{cat}</p>
+                    <div className="flex items-center gap-2">
+                      <Zap className={`h-3.5 w-3.5 ${auto ? 'text-primary' : 'text-muted-foreground/40'}`} />
+                      <span className="text-[11px] font-medium text-muted-foreground">Auto-assign</span>
                       <button
-                        onClick={() => handleDelete(a._id)}
-                        className="p-2 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
-                        title="Remove authority"
+                        onClick={() => handleToggleAuto(cat)}
+                        role="switch"
+                        aria-checked={auto}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${auto ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+                        title={`Turn auto-assign ${auto ? 'off' : 'on'} for ${cat}`}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${auto ? 'translate-x-4' : 'translate-x-1'}`} />
                       </button>
                     </div>
-                  ))}
+                  </div>
+                  {auto && (
+                    <p className="text-[11px] text-muted-foreground/70 mb-2">
+                      New {cat} issues auto-assign to <span className="font-semibold text-foreground">{items[0]?.name}</span>, cascading down this list on rejection.
+                    </p>
+                  )}
+                  <div className="space-y-2">
+                    {items.map((a, idx) => (
+                      <div
+                        key={a._id}
+                        className={`flex items-center justify-between p-3 rounded-xl border transition-colors ${
+                          editingId === a._id
+                            ? 'bg-primary/5 border-primary/50'
+                            : 'bg-muted/20 border-border/30 hover:bg-muted/40'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          {/* Priority index + reorder controls */}
+                          <div className="flex flex-col items-center shrink-0">
+                            <button
+                              onClick={() => handleReorder(cat, idx, -1)}
+                              disabled={idx === 0}
+                              className="p-0.5 rounded text-muted-foreground hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                              title="Move up (higher priority)"
+                            >
+                              <ChevronUp className="h-3.5 w-3.5" />
+                            </button>
+                            <span className="text-[10px] font-bold text-muted-foreground tabular-nums">{idx + 1}</span>
+                            <button
+                              onClick={() => handleReorder(cat, idx, 1)}
+                              disabled={idx === items.length - 1}
+                              className="p-0.5 rounded text-muted-foreground hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                              title="Move down (lower priority)"
+                            >
+                              <ChevronDown className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-foreground truncate">{a.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {a.email}{a.phone ? ` · ${a.phone}` : ''}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => startEdit(a)}
+                            className="p-2 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
+                            title="Edit authority"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(a._id)}
+                            className="p-2 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                            title="Remove authority"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── NotificationEmailsPanel ───────────────────────────────────────────────────
+const NotificationEmailsPanel = ({ onClose }: { onClose: () => void }) => {
+  const [emails, setEmails] = useState<{ _id: string; email: string }[]>([]);
+  const [newEmail, setNewEmail] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const load = () => getNotificationEmails().then(setEmails).catch(() => {});
+  useEffect(() => { load(); }, []);
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmail.trim()) return;
+    setSaving(true);
+    try {
+      await addNotificationEmail(newEmail.trim());
+      setNewEmail('');
+      load();
+      toast.success('Notification email added');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to add email');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteNotificationEmail(id);
+      setEmails(prev => prev.filter(e => e._id !== id));
+      toast.success('Removed');
+    } catch {
+      toast.error('Failed to remove');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-card rounded-3xl shadow-card-hover border border-border/40 w-full max-w-lg max-h-[90vh] flex flex-col animate-slide-up">
+        <div className="flex items-center justify-between p-6 border-b border-border/30 shrink-0">
+          <div className="flex items-center gap-2">
+            <Bell className="h-5 w-5 text-primary" />
+            <h2 className="text-base font-bold font-display text-foreground">Notification Emails</h2>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-xl hover:bg-muted text-muted-foreground transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-foreground leading-relaxed">
+              These addresses are emailed <strong>only when an authority rejects</strong> an assignment, so an admin can step in and re-assign. Separate from your admin login accounts.
+            </p>
+          </div>
+
+          <form onSubmit={handleAdd} className="flex gap-2">
+            <input
+              type="email"
+              placeholder="admin@uem.edu.in"
+              value={newEmail}
+              onChange={e => setNewEmail(e.target.value)}
+              className="flex-1 px-3 py-2.5 rounded-xl border border-input bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-primary transition-all"
+              required
+            />
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl gradient-primary text-primary-foreground text-sm font-bold shadow-button hover:opacity-90 transition-all disabled:opacity-40"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              Add
+            </button>
+          </form>
+
+          {emails.length === 0 ? (
+            <p className="text-center text-muted-foreground text-sm py-6">No notification emails yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {emails.map(e => (
+                <div key={e._id} className="flex items-center justify-between p-3 rounded-xl border bg-muted/20 border-border/30">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm text-foreground truncate">{e.email}</span>
+                  </div>
+                  <button
+                    onClick={() => handleDelete(e._id)}
+                    className="p-2 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all shrink-0"
+                    title="Remove"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
@@ -316,14 +575,17 @@ const AdminDashboard = () => {
   const [complaints, setComplaints] = useState<any[]>([]);
   const [recurring, setRecurring]   = useState<any[]>([]);
   const [page, setPage]             = useState(1);
+  const [search, setSearch]         = useState('');
   const [showExport, setShowExport] = useState(false);
   const [exportFrom, setExportFrom] = useState('');
   const [exportTo, setExportTo]     = useState('');
   const [assigning, setAssigning]   = useState<any | null>(null);
   const [showManage, setShowManage] = useState(false);
+  const [showNotify, setShowNotify] = useState(false);
+  const [loading, setLoading]       = useState(true);
   const navigate = useNavigate();
 
-  const adminUser  = JSON.parse(localStorage.getItem('admin_user') || 'null');
+  const adminUser  = getStoredJSON<{ name?: string; email?: string }>('admin_user');
   const adminName  = adminUser?.name ?? 'Admin';
 
   const handleExport = () => {
@@ -383,12 +645,16 @@ const AdminDashboard = () => {
   };
 
   useEffect(() => {
-    getAdminComplaints().then(setComplaints);
+    setLoading(true);
+    getAdminComplaints()
+      .then(setComplaints)
+      .catch(() => toast.error('Failed to load complaints'))
+      .finally(() => setLoading(false));
     getRecurringComplaints().then(setRecurring).catch(() => {});
   }, []);
 
   const total       = complaints.length;
-  const pending     = complaints.filter(c => c.status === 'Submitted' || c.status === 'Reopened').length;
+  const pending     = complaints.filter(c => ['Submitted', 'Reopened', 'Rejected'].includes(c.status)).length;
   const underFixing = complaints.filter(c => ['Assigned', 'In Progress', 'Pending Acceptance'].includes(c.status)).length;
   const resolved    = complaints.filter(c => c.status === 'Completed').length;
 
@@ -419,8 +685,17 @@ const AdminDashboard = () => {
     return entries.map(({ month, count }) => ({ month, count }));
   })();
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const paginated  = complaints.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  // Audit-log search: match ticket number or raised-by email (case-insensitive).
+  const q = search.trim().toLowerCase();
+  const filteredComplaints = q
+    ? complaints.filter(c =>
+        (c.ticket_number || '').toLowerCase().includes(q) ||
+        (c.student_email || '').toLowerCase().includes(q))
+    : complaints;
+
+  const filteredTotal = filteredComplaints.length;
+  const totalPages = Math.max(1, Math.ceil(filteredTotal / PAGE_SIZE));
+  const paginated  = filteredComplaints.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div className="space-y-8">
@@ -434,6 +709,7 @@ const AdminDashboard = () => {
         />
       )}
       {showManage && <ManageAuthorityPanel onClose={() => setShowManage(false)} />}
+      {showNotify && <NotificationEmailsPanel onClose={() => setShowNotify(false)} />}
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-slide-up">
@@ -454,6 +730,13 @@ const AdminDashboard = () => {
             Manage Authority
           </button>
           <button
+            onClick={() => setShowNotify(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-muted hover:bg-muted/80 text-foreground text-sm font-semibold transition-all border border-border/40"
+          >
+            <Bell className="h-4 w-4" />
+            Notification Emails
+          </button>
+          <button
             onClick={() => setShowExport(v => !v)}
             className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary/10 hover:bg-primary/20 text-primary text-sm font-semibold transition-all border border-primary/20"
           >
@@ -461,7 +744,7 @@ const AdminDashboard = () => {
             Export XLSX
           </button>
           <button
-            onClick={() => { localStorage.removeItem(SESSION_KEY); localStorage.removeItem('admin_user'); navigate('/welcome'); }}
+            onClick={() => { localStorage.removeItem('auth_token'); localStorage.removeItem(SESSION_KEY); localStorage.removeItem('admin_user'); navigate('/welcome'); }}
             className="text-sm text-muted-foreground hover:text-destructive transition-colors font-medium"
           >
             Sign out
@@ -614,8 +897,25 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Table */}
+      {/* Audit Logs */}
       <div className="bg-card rounded-2xl shadow-card border border-border/40 overflow-hidden animate-slide-up" style={{ animationDelay: '200ms' }}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 border-b border-border/40 bg-muted/30">
+          <div className="flex items-center gap-2">
+            <ScrollText className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-bold font-display text-foreground uppercase tracking-wider">Audit Logs</h2>
+            <span className="text-xs text-muted-foreground">({filteredTotal})</span>
+          </div>
+          <div className="relative w-full sm:w-80">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Search by ticket ID or email…"
+              className="w-full pl-9 pr-3 py-2 rounded-xl border border-border/40 bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-primary transition-all"
+            />
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -647,16 +947,14 @@ const AdminDashboard = () => {
                   {/* Category */}
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-2">
-                      <span className="text-lg leading-none">
-                        {c.category === 'Electricity' ? '⚡' : c.category === 'Water' ? '💧' : c.category === 'Internet' ? '📡' : c.category === 'Furniture' ? '🪑' : c.category === 'Cleanliness' ? '🧹' : '🏗️'}
-                      </span>
+                      <span className="text-lg leading-none">{categoryEmoji(c.category)}</span>
                       <span className="font-medium text-foreground">{c.category}</span>
                     </div>
                   </td>
 
                   {/* Location */}
                   <td className="px-5 py-4 text-muted-foreground hidden sm:table-cell">
-                    {c.location.building}, {c.location.room}
+                    {c.location?.building}, {c.location?.room}
                   </td>
 
                   {/* Raised By */}
@@ -671,7 +969,7 @@ const AdminDashboard = () => {
                   <td className="px-5 py-4">
                     <div className="space-y-1">
                       <StatusBadge status={c.status} />
-                      {c.status === 'Assigned' && c.assignedTo?.name && (
+                      {['Assigned', 'In Progress', 'Pending Acceptance'].includes(c.status) && c.assignedTo?.name && (
                         <p className="text-[10px] text-muted-foreground">
                           → {c.assignedTo.name}
                         </p>
@@ -695,13 +993,13 @@ const AdminDashboard = () => {
                         <Eye className="h-4 w-4" />
                       </button>
 
-                      {(c.status === 'Submitted' || c.status === 'Reopened') && (
+                      {['Submitted', 'Reopened', 'Rejected'].includes(c.status) && (
                         <button
                           onClick={() => setAssigning(c)}
                           className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 text-xs font-semibold transition-all border border-primary/20 whitespace-nowrap"
                         >
                           <UserPlus className="h-3.5 w-3.5" />
-                          {c.status === 'Reopened' ? 'Re-Assign' : 'Assign'}
+                          {c.status === 'Submitted' ? 'Assign' : 'Re-Assign'}
                         </button>
                       )}
 
@@ -736,7 +1034,7 @@ const AdminDashboard = () => {
               {paginated.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-5 py-12 text-center text-muted-foreground text-sm">
-                    No complaints found.
+                    {loading ? 'Loading complaints…' : q ? 'No matching complaints.' : 'No complaints found.'}
                   </td>
                 </tr>
               )}
@@ -748,8 +1046,8 @@ const AdminDashboard = () => {
         <div className="flex items-center justify-between px-5 py-4 border-t border-border/30 bg-muted/20">
           <p className="text-xs text-muted-foreground">
             Showing{' '}
-            <span className="font-semibold text-foreground">{Math.min((page - 1) * PAGE_SIZE + 1, total)}–{Math.min(page * PAGE_SIZE, total)}</span>{' '}
-            of <span className="font-semibold text-foreground">{total}</span> complaints
+            <span className="font-semibold text-foreground">{Math.min((page - 1) * PAGE_SIZE + 1, filteredTotal)}–{Math.min(page * PAGE_SIZE, filteredTotal)}</span>{' '}
+            of <span className="font-semibold text-foreground">{filteredTotal}</span> complaints
           </p>
           <div className="flex items-center gap-2">
             <button

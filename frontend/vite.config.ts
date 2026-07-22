@@ -19,6 +19,7 @@ export default defineConfig(({ mode }) => ({
       '/uploads': {
         target: 'http://localhost:8021',
         changeOrigin: true,
+        secure: false,
       },
     },
   },

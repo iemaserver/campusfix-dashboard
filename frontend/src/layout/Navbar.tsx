@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, FileWarning, ListChecks, Shield, Menu, X, Sun, Moon, LogOut } from 'lucide-react';
+import { LayoutDashboard, FileWarning, ListChecks, Shield, Wrench, Menu, X, Sun, Moon, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getStoredJSON } from '@/lib/storage';
 
 const studentNavItems = [
   { label: 'Dashboard', path: '/', icon: LayoutDashboard },
@@ -13,7 +14,12 @@ const adminNavItems = [
   { label: 'Admin', path: '/admin', icon: Shield },
 ];
 
+const authorityNavItems = [
+  { label: 'Authority', path: '/authority', icon: Wrench },
+];
+
 const ADMIN_SESSION_KEY = 'admin_session';
+const AUTHORITY_SESSION_KEY = 'authority_session';
 
 const Navbar = () => {
   const location = useLocation();
@@ -21,33 +27,48 @@ const Navbar = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dark, setDark] = useState(() => localStorage.getItem('theme') === 'dark');
 
-  const studentUser = JSON.parse(localStorage.getItem('student_user') || 'null');
-  const isAdminLoggedIn = (() => {
-    const session = localStorage.getItem(ADMIN_SESSION_KEY);
+  const studentUser = getStoredJSON<{ name?: string }>('student_user');
+  const sessionActive = (key: string) => {
+    const session = localStorage.getItem(key);
     if (!session) return false;
     const expiry = Number(session);
     if (Number.isNaN(expiry) || Date.now() >= expiry) {
-      localStorage.removeItem(ADMIN_SESSION_KEY);
+      localStorage.removeItem(key);
       return false;
     }
     return true;
-  })();
+  };
+  const isAdminLoggedIn = sessionActive(ADMIN_SESSION_KEY);
+  const isAuthorityLoggedIn = sessionActive(AUTHORITY_SESSION_KEY);
 
-  // Admin takes full precedence — student tabs are completely hidden for admins
-  const visibleNavItems = isAdminLoggedIn ? adminNavItems : studentNavItems;
+  // Admin > authority > student precedence — each role sees only its own tabs.
+  const visibleNavItems = isAdminLoggedIn
+    ? adminNavItems
+    : isAuthorityLoggedIn
+      ? authorityNavItems
+      : studentNavItems;
 
   const handleLogout = () => {
+    localStorage.removeItem('auth_token');
     if (isAdminLoggedIn) {
       localStorage.removeItem(ADMIN_SESSION_KEY);
       localStorage.removeItem('admin_user');
+    } else if (isAuthorityLoggedIn) {
+      localStorage.removeItem(AUTHORITY_SESSION_KEY);
+      localStorage.removeItem('authority_user');
     } else {
       localStorage.removeItem('student_user');
     }
     navigate('/welcome');
   };
 
-  const adminUser = JSON.parse(localStorage.getItem('admin_user') || 'null');
-  const displayName = isAdminLoggedIn ? (adminUser?.name ?? 'Admin') : studentUser?.name ?? '';
+  const adminUser = getStoredJSON<{ name?: string }>('admin_user');
+  const authorityUser = getStoredJSON<{ name?: string }>('authority_user');
+  const displayName = isAdminLoggedIn
+    ? (adminUser?.name ?? 'Admin')
+    : isAuthorityLoggedIn
+      ? (authorityUser?.name ?? 'Authority')
+      : studentUser?.name ?? '';
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
@@ -59,7 +80,7 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link to={isAdminLoggedIn ? '/admin' : '/'} className="flex items-center gap-3 group">
+          <Link to={isAdminLoggedIn ? '/admin' : isAuthorityLoggedIn ? '/authority' : '/'} className="flex items-center gap-3 group">
             <div className="flex items-center gap-2">
               <img src="/assets/IEM.png" alt="IEM Logo" className="h-10 w-10 object-contain drop-shadow-sm" />
               <img src="/assets/UEM_LOGO.png" alt="UEM Logo" className="h-10 w-10 object-contain drop-shadow-sm" />

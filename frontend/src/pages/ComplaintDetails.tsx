@@ -3,28 +3,22 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, MapPin, Tag, Calendar, CheckCircle2, Clock, UserCheck,
   Loader2, Info, Ticket, Mail, Expand, X, ZoomIn, ZoomOut, Download,
-  RotateCcw, AlertTriangle, Star,
+  RotateCcw, AlertTriangle, Star, XCircle,
 } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
-import { getComplaintById } from '@/services/api';
+import { getComplaintById, resolvePhotoUrl } from '@/services/api';
+import { getStoredJSON } from '@/lib/storage';
+import { CATEGORY_META, DEFAULT_CATEGORY } from '@/lib/constants';
 import { AcceptFeedbackModal, ReopenModal } from '@/components/AcceptReopenModals';
 import { toast } from 'sonner';
 
 const timelineSteps = [
   { label: 'Submitted',          desc: 'Complaint registered',          icon: Clock },
   { label: 'Assigned',           desc: 'Department assigned',            icon: UserCheck },
+  { label: 'In Progress',        desc: 'Being worked on',               icon: Loader2 },
   { label: 'Pending Acceptance', desc: 'Fix ready — awaiting student',   icon: AlertTriangle },
   { label: 'Completed',          desc: 'Issue resolved & accepted',      icon: CheckCircle2 },
 ];
-
-const categoryConfig: Record<string, { emoji: string; gradient: string }> = {
-  Electricity:    { emoji: '⚡', gradient: 'from-amber-500 to-yellow-500' },
-  Water:          { emoji: '💧', gradient: 'from-blue-500 to-cyan-500' },
-  Internet:       { emoji: '📡', gradient: 'from-violet-500 to-purple-500' },
-  Furniture:      { emoji: '🪑', gradient: 'from-orange-500 to-amber-500' },
-  Cleanliness:    { emoji: '🧹', gradient: 'from-emerald-500 to-green-500' },
-  Infrastructure: { emoji: '🏗️', gradient: 'from-slate-500 to-gray-500' },
-};
 
 const fmtTimestamp = (iso: string) => {
   if (!iso) return null;
@@ -150,17 +144,47 @@ const ComplaintDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [complaint, setComplaint] = useState<any>(null);
+  const [loadError, setLoadError] = useState(false);
   const [lightbox, setLightbox]   = useState(false);
   const [accepting, setAccepting] = useState(false);
   const [reopening, setReopening] = useState(false);
 
-  const currentUser  = JSON.parse(localStorage.getItem('student_user') || '{}');
+  const currentUser  = getStoredJSON<{ name?: string; email?: string }>('student_user') ?? {};
   const studentName  = currentUser.name || currentUser.email?.split('@')[0] || 'Student';
   const isOwner      = complaint && currentUser.email && complaint.student_email === currentUser.email;
 
+  // The detailed activity log (incl. internal reject reasons / cascade hops) is for
+  // staff only. Students keep the higher-level stepper and never see rejections.
+  const sessionActive = (k: string) => {
+    const s = localStorage.getItem(k);
+    if (!s) return false;
+    const exp = Number(s);
+    return !Number.isNaN(exp) && Date.now() < exp;
+  };
+  const isStaff = sessionActive('admin_session') || sessionActive('authority_session');
+
   useEffect(() => {
-    if (id) getComplaintById(id).then(setComplaint);
+    if (!id) return;
+    let active = true;
+    setLoadError(false);
+    getComplaintById(id)
+      .then(data => { if (active) setComplaint(data); })
+      .catch(() => { if (active) setLoadError(true); });
+    return () => { active = false; };
   }, [id]);
+
+  if (loadError) return (
+    <div className="flex flex-col items-center justify-center h-64 gap-4 text-center">
+      <AlertTriangle className="h-8 w-8 text-destructive" />
+      <div>
+        <p className="text-sm font-semibold text-foreground">Couldn't load this complaint</p>
+        <p className="text-xs text-muted-foreground mt-1">It may have been removed, or the server is unreachable.</p>
+      </div>
+      <button onClick={() => navigate(-1)} className="text-sm font-medium text-primary hover:underline">
+        Go back
+      </button>
+    </div>
+  );
 
   if (!complaint) return (
     <div className="flex items-center justify-center h-64">
@@ -168,13 +192,19 @@ const ComplaintDetails = () => {
     </div>
   );
 
-  const config = categoryConfig[complaint.category] || categoryConfig['Infrastructure'];
+  const meta = CATEGORY_META[complaint.category] || CATEGORY_META[DEFAULT_CATEGORY];
 
-  // Map Reopened to its visual position in the timeline (same slot as Completed, shown differently)
+  // Map Reopened / Rejected to their visual position in the timeline (shown as a
+  // terminal node in the happy-path stepper; the full history lives in the Activity Log).
   const displaySteps = complaint.status === 'Reopened'
     ? [
-        ...timelineSteps.slice(0, 3),
+        ...timelineSteps.slice(0, 4),
         { label: 'Reopened', desc: 'Student reopened the complaint', icon: RotateCcw },
+      ]
+    : complaint.status === 'Rejected'
+    ? [
+        ...timelineSteps.slice(0, 2),
+        { label: 'Rejected', desc: 'Authority rejected — awaiting re-assignment', icon: XCircle },
       ]
     : timelineSteps;
 
@@ -207,17 +237,21 @@ const ComplaintDetails = () => {
       case 'Assigned': {
         const authorityName = statusMeta['Assigned']?.authority_name || complaint.assignedTo?.name || '';
         const adminBy       = statusMeta['Assigned']?.admin_name     || complaint.assignedTo?.assigned_by || '';
+        const auto          = adminBy === 'Auto-assign';
+        if (authorityName && auto)    return `Auto-assigned to ${authorityName}`;
         if (authorityName && adminBy) return `Assigned to ${authorityName} by Admin — ${adminBy}`;
-        if (authorityName)           return `Assigned to ${authorityName}`;
-        if (adminBy)                 return `Assigned by Admin — ${adminBy}`;
+        if (authorityName)            return `Assigned to ${authorityName}`;
+        if (adminBy && !auto)         return `Assigned by Admin — ${adminBy}`;
         return null;
       }
       case 'In Progress': {
-        const name = complaint.assignedTo?.name || statusMeta['Assigned']?.authority_name || '';
-        return name ? `Being handled by ${name}` : null;
+        const name = statusMeta['In Progress']?.authority_name || complaint.assignedTo?.name || statusMeta['Assigned']?.authority_name || '';
+        return name ? `Accepted — being handled by ${name}` : 'Accepted by the authority';
       }
       case 'Pending Acceptance': {
-        const adminBy = statusMeta['Pending Acceptance']?.admin_name || '';
+        const authorityBy = statusMeta['Pending Acceptance']?.authority_name || '';
+        const adminBy     = statusMeta['Pending Acceptance']?.admin_name || '';
+        if (authorityBy) return `Marked resolved by ${authorityBy}`;
         return adminBy ? `Resolved by Admin — ${adminBy}` : 'Awaiting student confirmation';
       }
       case 'Completed': {
@@ -228,16 +262,60 @@ const ComplaintDetails = () => {
         const studentBy = statusMeta['Reopened']?.student_name || '';
         return studentBy ? `Reopened by ${studentBy}` : null;
       }
+      case 'Rejected':
+        // Kept neutral in the shared stepper — the who/why lives in the staff-only
+        // Activity Log, never surfaced to the student.
+        return 'Awaiting re-assignment by admin';
       default:
         return null;
     }
   };
 
+  // Full, un-deduped chronological history — the reject cascade can produce several
+  // Assigned/Rejected entries that the linear stepper above can't represent.
+  const activityIcon = (status: string) => ({
+    'Submitted': Clock,
+    'Assigned': UserCheck,
+    'In Progress': Loader2,
+    'Rejected': XCircle,
+    'Pending Acceptance': AlertTriangle,
+    'Completed': CheckCircle2,
+    'Reopened': RotateCcw,
+  }[status] ?? Info);
+
+  const activityText = (h: any): { title: string; detail?: string; reason?: string } => {
+    switch (h.status) {
+      case 'Submitted':
+        return { title: 'Complaint registered', detail: complaint.student_email ? `by ${complaint.student_email}` : undefined };
+      case 'Assigned': {
+        const auto = h.admin_name === 'Auto-assign';
+        return {
+          title: `Assigned to ${h.authority_name || 'an authority'}`,
+          detail: auto ? 'auto-assigned by priority' : h.admin_name ? `by Admin — ${h.admin_name}` : undefined,
+        };
+      }
+      case 'In Progress':
+        return { title: 'Assignment accepted', detail: h.authority_name ? `by ${h.authority_name}` : undefined };
+      case 'Rejected':
+        return { title: 'Assignment rejected', detail: h.authority_name ? `by ${h.authority_name}` : undefined, reason: h.reason };
+      case 'Pending Acceptance':
+        return { title: 'Marked as resolved', detail: h.authority_name ? `by ${h.authority_name}` : h.admin_name ? `by Admin — ${h.admin_name}` : undefined };
+      case 'Completed':
+        return { title: 'Fix accepted', detail: h.student_name ? `by ${h.student_name}` : undefined };
+      case 'Reopened':
+        return { title: 'Complaint reopened', detail: h.student_name ? `by ${h.student_name}` : undefined, reason: h.reason };
+      default:
+        return { title: h.status };
+    }
+  };
+
+  const history = complaint.status_history || [];
+
   return (
     <>
       {lightbox && complaint.photo && (
         <ImageLightbox
-          src={complaint.photo}
+          src={resolvePhotoUrl(complaint.photo) ?? ''}
           alt={complaint.category}
           onClose={() => setLightbox(false)}
         />
@@ -268,7 +346,7 @@ const ComplaintDetails = () => {
           {/* Hero banner */}
           {complaint.photo ? (
             <div className="relative h-56 overflow-hidden group cursor-pointer" onClick={() => setLightbox(true)}>
-              <img src={complaint.photo} alt={complaint.category} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+              <img src={resolvePhotoUrl(complaint.photo) ?? undefined} alt={complaint.category} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
               {/* Expand hint overlay */}
               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
@@ -287,11 +365,11 @@ const ComplaintDetails = () => {
               </button>
             </div>
           ) : (
-            <div className={`relative h-40 bg-gradient-to-r ${config.gradient} flex items-center justify-center overflow-hidden`}>
+            <div className={`relative h-40 bg-gradient-to-r ${meta.solidGradient} flex items-center justify-center overflow-hidden`}>
               <div className="absolute inset-0 bg-black/10" />
               <div className="absolute top-4 right-4 w-32 h-32 bg-white/10 rounded-full" />
               <div className="absolute bottom-4 left-8 w-20 h-20 bg-white/5 rounded-full" />
-              <span className="text-6xl relative z-10 drop-shadow-lg">{config.emoji}</span>
+              <span className="text-6xl relative z-10 drop-shadow-lg">{meta.emoji}</span>
             </div>
           )}
 
@@ -311,7 +389,7 @@ const ComplaintDetails = () => {
               <div className="flex flex-wrap gap-4 mt-3 text-sm text-muted-foreground">
                 <span className="flex items-center gap-1.5">
                   <MapPin className="h-4 w-4 text-primary/60" />
-                  {complaint.location.building}, {complaint.location.floor}, {complaint.location.room}
+                  {complaint.location?.building}, {complaint.location?.floor}, {complaint.location?.room}
                 </span>
                 <span className="flex items-center gap-1.5">
                   <Calendar className="h-4 w-4 text-primary/60" />
@@ -412,7 +490,7 @@ const ComplaintDetails = () => {
                         } ${isCurrent ? 'ring-4 ring-secondary/20 scale-110' : ''}`}>
                           <step.icon className="h-4 w-4" />
                         </div>
-                        {i < timelineSteps.length - 1 && (
+                        {i < displaySteps.length - 1 && (
                           <div className={`w-0.5 h-16 transition-colors ${isActive ? 'bg-primary/40' : 'bg-border'}`} />
                         )}
                       </div>
@@ -435,6 +513,34 @@ const ComplaintDetails = () => {
                 })}
               </div>
             </div>
+
+            {/* Activity Log — full chronological history (staff only; students see the stepper) */}
+            {isStaff && history.length > 0 && (
+              <div>
+                <h2 className="text-sm font-bold font-display text-foreground mb-4">Activity Log</h2>
+                <div className="space-y-3">
+                  {history.map((h: any, i: number) => {
+                    const Icon = activityIcon(h.status);
+                    const t = activityText(h);
+                    return (
+                      <div key={i} className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0 mt-0.5">
+                          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground">
+                            {t.title}
+                            {t.detail && <span className="text-muted-foreground font-normal"> {t.detail}</span>}
+                          </p>
+                          {t.reason && <p className="text-xs text-rose-600 mt-0.5 italic">"{t.reason}"</p>}
+                          {h.timestamp && <p className="text-[11px] text-muted-foreground/70 mt-0.5">{fmtTimestamp(h.timestamp)}</p>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

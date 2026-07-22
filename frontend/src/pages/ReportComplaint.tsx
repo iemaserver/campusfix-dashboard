@@ -2,16 +2,11 @@ import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Send, Upload, QrCode, MapPin, FileText, ChevronDown, X } from 'lucide-react';
 import { createComplaint } from '@/services/api';
+import { getStoredJSON } from '@/lib/storage';
+import { CATEGORIES, categoryEmoji } from '@/lib/constants';
 import { toast } from 'sonner';
 
-const categories = [
-  { label: 'Electricity', emoji: '⚡' },
-  { label: 'Furniture', emoji: '🪑' },
-  { label: 'Water', emoji: '💧' },
-  { label: 'Internet', emoji: '📡' },
-  { label: 'Cleanliness', emoji: '🧹' },
-  { label: 'Infrastructure', emoji: '🏗️' },
-];
+const categories = CATEGORIES.map(label => ({ label, emoji: categoryEmoji(label) }));
 
 const ReportComplaint = () => {
   const navigate = useNavigate();
@@ -28,7 +23,7 @@ const ReportComplaint = () => {
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => fd.append(k, v));
       if (photo) fd.append('photo', photo);
-      const user = JSON.parse(localStorage.getItem('student_user') || '{}');
+      const user = getStoredJSON<{ email?: string }>('student_user') ?? {};
       if (user.email) fd.append('student_email', user.email);
       await createComplaint(fd);
       toast.success('Complaint submitted successfully!');

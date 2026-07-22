@@ -1,8 +1,9 @@
 ﻿import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, GraduationCap, Mail, KeyRound, LogIn } from 'lucide-react';
-import { sendOtp, verifyOtp } from '@/services/api';
+import { sendOtp, verifyOtp, clearSession } from '@/services/api';
 import { toast } from 'sonner';
+import axios from 'axios';
 
 const isAllowedStudentEmail = (value: string) => {
   const emailValue = value.toLowerCase();
@@ -16,6 +17,7 @@ const StudentLogin = () => {
   const [otpSent, setOtpSent] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const otpInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -23,6 +25,20 @@ const StudentLogin = () => {
       otpInputRef.current?.focus();
     }
   }, [otpSent]);
+
+  // 1-second countdown that gates the "Resend OTP" button.
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const id = setTimeout(() => setResendCooldown(c => c - 1), 1000);
+    return () => clearTimeout(id);
+  }, [resendCooldown]);
+
+  // Deliberate restart: unlock the email field and clear the current OTP/cooldown.
+  const handleChangeEmail = () => {
+    setOtpSent(false);
+    setOtp('');
+    setResendCooldown(0);
+  };
 
   const handleSendOtp = async () => {
     if (!isAllowedStudentEmail(email)) {
@@ -32,12 +48,20 @@ const StudentLogin = () => {
 
     setSendingOtp(true);
     try {
-      await sendOtp(email.toLowerCase());
+      const res = await sendOtp(email.toLowerCase());
       setOtp('');
       setOtpSent(true);
+      setResendCooldown(res?.resend_after ?? 30);
       toast.success('OTP sent to your email');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to send OTP';
+      let message = 'Failed to send OTP';
+      if (axios.isAxiosError(err)) {
+        message = err.response?.data?.error ?? message;
+        const retry = err.response?.data?.retry_after;
+        if (typeof retry === 'number') setResendCooldown(retry);
+      } else if (err instanceof Error) {
+        message = err.message;
+      }
       toast.error(message);
     } finally {
       setSendingOtp(false);
@@ -58,6 +82,12 @@ const StudentLogin = () => {
     setVerifying(true);
     try {
       const res = await verifyOtp(email.toLowerCase(), otp.trim());
+      if (!res?.user) {
+        toast.error('Login failed — unexpected server response');
+        return;
+      }
+      clearSession(); // drop any prior admin/authority session before switching role
+      if (res.token) localStorage.setItem('auth_token', res.token);
       localStorage.setItem('student_user', JSON.stringify(res.user));
       toast.success(`Welcome back, ${res.user.name || res.user.email}!`);
       navigate('/');
@@ -113,10 +143,24 @@ const StudentLogin = () => {
                 placeholder="yourname@uem.edu.in or yourname@iem.edu.in"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-primary text-sm transition-all"
+                disabled={otpSent}
+                className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-primary text-sm transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 required
               />
             </div>
+
+            {otpSent && (
+              <div className="flex items-center justify-between -mt-1 px-1">
+                <span className="text-[11px] text-muted-foreground">🔒 OTP sent to this email — locked</span>
+                <button
+                  type="button"
+                  onClick={handleChangeEmail}
+                  className="text-[11px] font-semibold text-primary hover:underline"
+                >
+                  Change email
+                </button>
+              </div>
+            )}
 
             {otpSent && (
               <div className="space-y-3 animate-slide-up">
@@ -197,10 +241,12 @@ const StudentLogin = () => {
                 <button
                   type="button"
                   onClick={handleSendOtp}
-                  disabled={sendingOtp || verifying}
-                  className="w-full py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all disabled:opacity-40"
+                  disabled={sendingOtp || verifying || resendCooldown > 0}
+                  className="w-full py-2.5 rounded-xl text-sm font-semibold text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  {sendingOtp ? 'Resending OTP...' : 'Resend OTP'}
+                  {resendCooldown > 0
+                    ? `Resend OTP in ${resendCooldown}s`
+                    : sendingOtp ? 'Resending OTP...' : 'Resend OTP'}
                 </button>
               </>
             )}

@@ -65,7 +65,8 @@ jobs:
             ADMIN_1_EMAIL=${{ secrets.ADMIN_1_EMAIL }}
             ADMIN_1_PASSWORD=${{ secrets.ADMIN_1_PASSWORD }}
             ADMIN_1_NAME=${{ secrets.ADMIN_1_NAME }}
-            MICROSOFT_CLIENT_ID=${{ secrets.MICROSOFT_CLIENT_ID }}
+            SECRET_KEY=${{ secrets.SECRET_KEY }}
+            TOKEN_MAX_AGE=${{ secrets.TOKEN_MAX_AGE }}
 
       - name: Update deployment status (success)
         if: success()
